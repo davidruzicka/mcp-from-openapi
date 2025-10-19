@@ -1,0 +1,237 @@
+{
+  "$schema": "../../../profile-schema.json",
+  "profile_name": "gitlab-developer",
+  "description": "Developer-focused tools for common GitLab workflows",
+  
+  "parameter_aliases": {
+    "id": ["project_id", "group_id", "resource_id"],
+    "badge_id": ["badge_id"],
+    "branch": ["branch"],
+    "user_id": ["user_id"],
+    "job_id": ["job_id"],
+    "merge_request_iid": ["iid"]
+  },
+  
+  "tools": [
+    {
+      "name": "manage_project_badges",
+      "description": "Manage badges for a project. Actions: 'list' (get all badges), 'get' (single badge by ID), 'create' (new badge with link_url and image_url), 'update' (modify existing badge), 'delete' (remove badge). Use 'list' when you want to see what badges exist, 'create' to add new ones.",
+      "metadata_params": ["action", "project_id", "badge_id"],
+      "operations": {
+        "list": "getApiV4ProjectsIdBadges",
+        "get": "getApiV4ProjectsIdBadgesBadgeId",
+        "create": "postApiV4ProjectsIdBadges",
+        "update": "putApiV4ProjectsIdBadgesBadgeId",
+        "delete": "deleteApiV4ProjectsIdBadgesBadgeId"
+      },
+      "parameters": {
+        "project_id": {
+          "type": "string",
+          "description": "Project ID or URL-encoded path like 'my-org/my-project'",
+          "required": true
+        },
+        "action": {
+          "type": "string",
+          "enum": ["list", "get", "create", "update", "delete"],
+          "description": "Operation to perform",
+          "required": true
+        },
+        "badge_id": {
+          "type": "integer",
+          "description": "Badge ID",
+          "required_for": ["get", "update", "delete"]
+        },
+        "link_url": {
+          "type": "string",
+          "description": "URL the badge links to",
+          "required_for": ["create"]
+        },
+        "image_url": {
+          "type": "string",
+          "description": "URL of the badge image",
+          "required_for": ["create"]
+        },
+        "name": {
+          "type": "string",
+          "description": "Human-readable badge name"
+        },
+        "page": {
+          "type": "integer",
+          "description": "Page number for pagination",
+          "default": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "description": "Items per page (max 100)",
+          "default": 20
+        }
+      }
+    },
+
+    {
+      "name": "manage_branches",
+      "description": "Manage repository branches. Actions: 'list' (all branches, supports search/sort), 'get' (single branch details), 'create' (new branch from ref), 'delete' (remove branch), 'protect' (make protected), 'unprotect' (remove protection), 'exists' (check if branch exists). Use 'list' to see all branches, 'create' to make a new feature branch from main.",
+      "operations": {
+        "list": "getApiV4ProjectsIdRepositoryBranches",
+        "get": "getApiV4ProjectsIdRepositoryBranchesBranch",
+        "create": "postApiV4ProjectsIdRepositoryBranches",
+        "delete": "deleteApiV4ProjectsIdRepositoryBranchesBranch",
+        "protect": "putApiV4ProjectsIdRepositoryBranchesBranchProtect",
+        "unprotect": "putApiV4ProjectsIdRepositoryBranchesBranchUnprotect",
+        "exists": "headApiV4ProjectsIdRepositoryBranchesBranch"
+      },
+      "parameters": {
+        "project_id": {
+          "type": "string",
+          "description": "Project ID or URL-encoded path",
+          "required": true
+        },
+        "action": {
+          "type": "string",
+          "enum": ["list", "get", "create", "delete", "protect", "unprotect", "exists"],
+          "description": "Operation to perform on branches",
+          "required": true
+        },
+        "branch": {
+          "type": "string",
+          "description": "Branch name",
+          "required_for": ["get", "delete", "protect", "unprotect", "exists"]
+        },
+        "ref": {
+          "type": "string",
+          "description": "Source branch or commit SHA for new branch",
+          "required_for": ["create"]
+        },
+        "search": {
+          "type": "string",
+          "description": "Search branches by name (for list action)"
+        },
+        "sort": {
+          "type": "string",
+          "enum": ["name_asc", "updated_asc", "updated_desc"],
+          "description": "Sort order (for list action)"
+        },
+        "developers_can_push": {
+          "type": "boolean",
+          "description": "Allow developers to push (for protect action)"
+        },
+        "developers_can_merge": {
+          "type": "boolean",
+          "description": "Allow developers to merge (for protect action)"
+        }
+      }
+    },
+
+    {
+      "name": "manage_access_requests",
+      "description": "Manage access requests for projects or groups. Actions: 'list' (pending requests), 'approve' (grant access with access_level), 'deny' (reject request), 'request' (request access as current user). Use 'list' to see who requested access, 'approve' to grant it with specified access level (10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner).",
+      "operations": {
+        "list_project": "getApiV4ProjectsIdAccessRequests",
+        "list_group": "getApiV4GroupsIdAccessRequests",
+        "approve_project": "putApiV4ProjectsIdAccessRequestsUserIdApprove",
+        "approve_group": "putApiV4GroupsIdAccessRequestsUserIdApprove",
+        "deny_project": "deleteApiV4ProjectsIdAccessRequestsUserId",
+        "deny_group": "deleteApiV4GroupsIdAccessRequestsUserId",
+        "request_project": "postApiV4ProjectsIdAccessRequests",
+        "request_group": "postApiV4GroupsIdAccessRequests"
+      },
+      "parameters": {
+        "resource_type": {
+          "type": "string",
+          "enum": ["project", "group"],
+          "description": "Whether to operate on project or group",
+          "required": true
+        },
+        "resource_id": {
+          "type": "string",
+          "description": "Project or group ID",
+          "required": true
+        },
+        "action": {
+          "type": "string",
+          "enum": ["list", "approve", "deny", "request"],
+          "description": "Access request operation to perform",
+          "required": true
+        },
+        "user_id": {
+          "type": "integer",
+          "description": "User ID of requester",
+          "required_for": ["approve", "deny"]
+        },
+        "access_level": {
+          "type": "integer",
+          "description": "Access level to grant: 10=Guest, 20=Reporter, 30=Developer, 40=Maintainer, 50=Owner",
+          "default": 30
+        }
+      }
+    },
+
+    {
+      "name": "list_project_jobs",
+      "description": "List all CI/CD jobs for a project with optional status filtering. Use 'scope' parameter to filter by job status like ['failed', 'canceled', 'success', 'running', 'pending']. Useful for finding failed jobs or monitoring pipeline progress.",
+      "operations": {
+        "list": "listProjectJobs"
+      },
+      "parameters": {
+        "project_id": {
+          "type": "string",
+          "description": "Project ID or URL-encoded path",
+          "required": true
+        },
+        "scope": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Filter by job status (can specify multiple)"
+        }
+      }
+    },
+
+    {
+      "name": "manage_job",
+      "description": "Manage a specific CI/CD job. Actions: 'get' (fetch job details, logs, and timing), 'play' (trigger a manual/delayed job to run immediately). Use 'get' to see job status and output, 'play' to run jobs in 'manual' state.",
+      "operations": {
+        "get": "getSingleJob",
+        "play": "triggerManualJob"
+      },
+      "parameters": {
+        "project_id": {
+          "type": "string",
+          "description": "Project ID or URL-encoded path",
+          "required": true
+        },
+        "action": {
+          "type": "string",
+          "enum": ["get", "play"],
+          "description": "Job operation to perform",
+          "required": true
+        },
+        "job_id": {
+          "type": "integer",
+          "description": "The numeric job ID (not job name)",
+          "required": true
+        }
+      }
+    }
+  ],
+
+  "interceptors": {
+    "array_format": "brackets",
+    "auth": {
+      "type": "bearer",
+      "value_from_env": "API_TOKEN"
+    },
+    "base_url": {
+      "value_from_env": "API_BASE_URL",
+      "default": "https://gitlab.com/api/v4"
+    },
+    "rate_limit": {
+      "max_requests_per_minute": 600
+    },
+    "retry": {
+      "max_attempts": 3,
+      "backoff_ms": [1000, 2000, 4000],
+      "retry_on_status": [429, 502, 503, 504]
+    }
+  }
+}
+

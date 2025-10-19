@@ -1,0 +1,353 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/davidruzicka/mcp-from-openapi/profile-schema.json",
+  "title": "MCP Profile",
+  "description": "Configuration schema for MCP from OpenAPI tool profiles",
+  "type": "object",
+  "required": ["profile_name", "tools"],
+  "properties": {
+    "profile_name": {
+      "type": "string",
+      "description": "Unique identifier for this profile",
+      "examples": ["gitlab-developer", "github-readonly", "custom-api"]
+    },
+    "description": {
+      "type": "string",
+      "description": "Human-readable description of what this profile provides"
+    },
+    "parameter_aliases": {
+      "type": "object",
+      "description": "Map parameter names to their aliases (e.g., 'id' -> ['project_id', 'group_id'])",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "examples": [
+        {
+          "id": ["project_id", "group_id", "resource_id"]
+        }
+      ]
+    },
+    "tools": {
+      "type": "array",
+      "description": "List of MCP tools defined in this profile",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/definitions/Tool"
+      }
+    },
+    "interceptors": {
+      "$ref": "#/definitions/Interceptors"
+    }
+  },
+  "definitions": {
+    "Tool": {
+      "type": "object",
+      "required": ["name", "description", "parameters"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Tool name (must be unique, lowercase with underscores)",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "examples": ["manage_project_badges", "get_merge_request_with_details"]
+        },
+        "description": {
+          "type": "string",
+          "description": "Clear description of what this tool does (shown to LLM)",
+          "minLength": 10
+        },
+        "composite": {
+          "type": "boolean",
+          "description": "If true, this tool chains multiple API calls",
+          "default": false
+        },
+        "partial_results": {
+          "type": "boolean",
+          "description": "If true, return partial results even if some steps fail (composite only)",
+          "default": false
+        },
+        "operations": {
+          "type": "object",
+          "description": "Map action names to OpenAPI operationIds (for simple tools)",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "examples": [
+            {
+              "list": "getApiV4ProjectsIdBadges",
+              "get": "getApiV4ProjectsIdBadgesBadgeId",
+              "create": "postApiV4ProjectsIdBadges"
+            }
+          ]
+        },
+        "steps": {
+          "type": "array",
+          "description": "Sequence of API calls to execute (for composite tools)",
+          "items": {
+            "$ref": "#/definitions/CompositeStep"
+          }
+        },
+        "parameters": {
+          "type": "object",
+          "description": "Input parameters for this tool",
+          "additionalProperties": {
+            "$ref": "#/definitions/Parameter"
+          }
+        },
+        "metadata_params": {
+          "type": "array",
+          "description": "Parameter names that are metadata (not sent in API request body)",
+          "items": {
+            "type": "string"
+          },
+          "examples": [["action", "resource_type"]]
+        }
+      },
+      "oneOf": [
+        {
+          "required": ["operations"],
+          "properties": {
+            "operations": {
+              "type": "object"
+            }
+          }
+        },
+        {
+          "required": ["steps", "composite"],
+          "properties": {
+            "composite": {
+              "const": true
+            },
+            "steps": {
+              "type": "array"
+            }
+          }
+        }
+      ]
+    },
+    "Parameter": {
+      "type": "object",
+      "required": ["type", "description"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["string", "integer", "number", "boolean", "array", "object"],
+          "description": "Parameter data type"
+        },
+        "description": {
+          "type": "string",
+          "description": "Clear description of this parameter (shown to LLM)",
+          "minLength": 5
+        },
+        "required": {
+          "type": "boolean",
+          "description": "Is this parameter always required?",
+          "default": false
+        },
+        "required_for": {
+          "type": "array",
+          "description": "List of actions this parameter is required for",
+          "items": {
+            "type": "string"
+          },
+          "examples": [["create", "update"]]
+        },
+        "enum": {
+          "type": "array",
+          "description": "List of allowed values",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1
+        },
+        "items": {
+          "type": "object",
+          "description": "Item type for array parameters",
+          "properties": {
+            "type": {
+              "type": "string"
+            }
+          }
+        },
+        "default": {
+          "description": "Default value if not provided"
+        },
+        "example": {
+          "description": "Example value for documentation"
+        }
+      }
+    },
+    "CompositeStep": {
+      "type": "object",
+      "required": ["call", "store_as"],
+      "properties": {
+        "call": {
+          "type": "string",
+          "description": "OpenAPI operationId to call",
+          "examples": ["getApiV4ProjectsIdMergeRequestsMergeRequestIid"]
+        },
+        "store_as": {
+          "type": "string",
+          "description": "JSON path where to store result (e.g., 'merge_request', 'merge_request.comments')",
+          "pattern": "^[a-zA-Z_][a-zA-Z0-9_]*(\\.[a-zA-Z_][a-zA-Z0-9_]*)*$",
+          "examples": ["merge_request", "merge_request.comments", "user.profile"]
+        }
+      }
+    },
+    "Interceptors": {
+      "type": "object",
+      "description": "HTTP interceptor configuration (auth, rate limiting, retry)",
+      "properties": {
+        "auth": {
+          "$ref": "#/definitions/Auth"
+        },
+        "base_url": {
+          "$ref": "#/definitions/BaseUrl"
+        },
+        "rate_limit": {
+          "$ref": "#/definitions/RateLimit"
+        },
+        "retry": {
+          "$ref": "#/definitions/Retry"
+        },
+        "array_format": {
+          "type": "string",
+          "enum": ["brackets", "indices", "repeat", "comma"],
+          "description": "How to serialize array query parameters",
+          "default": "repeat",
+          "examples": ["brackets"]
+        }
+      }
+    },
+    "Auth": {
+      "type": "object",
+      "required": ["type", "value_from_env"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["bearer", "query", "custom-header"],
+          "description": "Authentication type"
+        },
+        "value_from_env": {
+          "type": "string",
+          "description": "Environment variable name containing the auth token",
+          "pattern": "^[A-Z][A-Z0-9_]*$",
+          "examples": ["API_TOKEN", "GITLAB_TOKEN"]
+        },
+        "header_name": {
+          "type": "string",
+          "description": "Custom header name (required for custom-header type)",
+          "examples": ["X-API-Key", "X-Auth-Token"]
+        },
+        "query_param": {
+          "type": "string",
+          "description": "Query parameter name (required for query type)",
+          "examples": ["api_key", "token"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "custom-header"
+              }
+            }
+          },
+          "then": {
+            "required": ["header_name"],
+            "properties": {
+              "header_name": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "query"
+              }
+            }
+          },
+          "then": {
+            "required": ["query_param"],
+            "properties": {
+              "query_param": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "BaseUrl": {
+      "type": "object",
+      "required": ["value_from_env"],
+      "properties": {
+        "value_from_env": {
+          "type": "string",
+          "description": "Environment variable name containing the base URL",
+          "pattern": "^[A-Z][A-Z0-9_]*$",
+          "examples": ["API_BASE_URL"]
+        },
+        "default": {
+          "type": "string",
+          "format": "uri",
+          "description": "Default base URL if environment variable is not set",
+          "examples": ["https://gitlab.com/api/v4"]
+        }
+      }
+    },
+    "RateLimit": {
+      "type": "object",
+      "required": ["max_requests_per_minute"],
+      "properties": {
+        "max_requests_per_minute": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Maximum number of requests per minute (token bucket algorithm)",
+          "examples": [600, 60, 30]
+        }
+      }
+    },
+    "Retry": {
+      "type": "object",
+      "required": ["max_attempts", "backoff_ms", "retry_on_status"],
+      "properties": {
+        "max_attempts": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10,
+          "description": "Maximum number of retry attempts",
+          "examples": [3]
+        },
+        "backoff_ms": {
+          "type": "array",
+          "description": "Backoff delays in milliseconds (one per attempt)",
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "minItems": 1,
+          "examples": [[1000, 2000, 4000]]
+        },
+        "retry_on_status": {
+          "type": "array",
+          "description": "HTTP status codes that trigger retry",
+          "items": {
+            "type": "integer",
+            "minimum": 400,
+            "maximum": 599
+          },
+          "minItems": 1,
+          "examples": [[429, 502, 503, 504]]
+        }
+      }
+    }
+  }
+}
+

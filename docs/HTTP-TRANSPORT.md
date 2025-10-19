@@ -1,0 +1,603 @@
+# HTTP Transport Guide
+
+HTTP Streamable transport enables remote MCP server access with SSE streaming, session management, and resumability.
+
+## When to Use HTTP Transport
+
+**Use HTTP transport when you need**:
+- Remote server access (not just localhost)
+- Multiple concurrent clients
+- Load balancing across MCP servers
+- Integration with reverse proxies (nginx, cloudflare)
+- Stateful sessions
+
+**Use stdio transport when you need**:
+- Local desktop MCP client
+- Simple single-client setup
+- Maximum security (no network exposure)
+
+## Quick Start
+
+### Basic Setup
+
+```bash
+# Set environment
+export MCP_TRANSPORT=http
+export MCP_HOST=127.0.0.1  # localhost only (secure default)
+export MCP_PORT=3003
+export API_TOKEN=your_token
+export API_BASE_URL=https://api.example.com
+
+# Start server
+npm start
+```
+
+Server will log:
+```
+{"timestamp":"...","level":"info","message":"HTTP transport started","host":"127.0.0.1","port":3003}
+```
+
+### Remote Access Setup
+
+```bash
+# Allow network access (use with caution!)
+export MCP_HOST=0.0.0.0
+export MCP_PORT=3003
+
+# Configure allowed origins (for corporate networks)
+export ALLOWED_ORIGINS="example.com,*.company.com,192.168.1.0/24,10.0.0.0/8"
+
+# Optional: Enable heartbeat for proxy keepalive
+export HEARTBEAT_ENABLED=true
+export HEARTBEAT_INTERVAL_MS=30000  # 30 seconds
+
+npm start
+```
+
+**Security Warning**: When binding to `0.0.0.0`, ensure firewall protection, configure `ALLOWED_ORIGINS`, and use HTTPS reverse proxy.
+
+## MCP Protocol Compliance
+
+This implementation follows **MCP Specification 2025-03-26** for Streamable HTTP transport.
+
+Source: https://modelcontextprotocol.io/specification/2025-03-26/basic/transports
+
+### Supported Features
+
+✅ Single MCP endpoint (`/mcp`) for POST + GET
+✅ JSON-RPC request/notification/response handling
+✅ Batch requests (JSON-RPC arrays)
+✅ SSE streaming responses
+✅ Session management (`Mcp-Session-Id` header)
+✅ Resumability (`Last-Event-ID` header)
+✅ Origin validation (DNS rebinding protection)
+✅ Session termination (DELETE endpoint)
+✅ Accept header validation
+
+## API Endpoints
+
+### POST /mcp - Send Messages
+
+**Purpose**: Client sends JSON-RPC messages to server
+
+**Headers**:
+- `Content-Type: application/json` (required)
+- `Accept: application/json` or `text/event-stream` (required)
+- `Mcp-Session-Id: <session-id>` (required except for initialization)
+
+**Request Body**:
+- Single JSON-RPC request/notification/response
+- Or array (batch) of requests/notifications/responses
+
+**Response**:
+- **HTTP 200** with JSON response (if `Accept: application/json`)
+- **HTTP 200** with SSE stream (if `Accept: text/event-stream`)
+- **HTTP 202** (no body) for notification-only messages
+- **HTTP 400/404/500** for errors
+
+**Example - Initialize**:
+```bash
+curl -X POST http://localhost:3003/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "clientInfo": {
+        "name": "my-client",
+        "version": "1.0.0"
+      }
+    }
+  }'
+```
+
+**Response**:
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "protocolVersion": "2025-03-26",
+    "serverInfo": {
+      "name": "mcp-from-openapi",
+      "version": "0.1.0"
+    },
+    "capabilities": {
+      "tools": {}
+    }
+  }
+}
+```
+
+**Response Headers**:
+```
+Mcp-Session-Id: <generated-session-id>
+```
+
+**Example - List Tools**:
+```bash
+SESSION_ID="<session-id-from-init>"
+
+curl -X POST http://localhost:3003/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -H "Mcp-Session-Id: $SESSION_ID" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/list",
+    "params": {}
+  }'
+```
+
+**Example - Call Tool**:
+```bash
+curl -X POST http://localhost:3003/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -H "Mcp-Session-Id: $SESSION_ID" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "tools/call",
+    "params": {
+      "name": "manage_project_badges",
+      "arguments": {
+        "action": "list",
+        "project_id": "my-org/my-project"
+      }
+    }
+  }'
+```
+
+### GET /mcp - Open SSE Stream
+
+**Purpose**: Open Server-Sent Events stream for server-initiated messages
+
+**Headers**:
+- `Accept: text/event-stream` (required)
+- `Mcp-Session-Id: <session-id>` (required)
+- `Last-Event-ID: <event-id>` (optional, for resuming)
+
+**Response**:
+- **HTTP 200** with SSE stream (`Content-Type: text/event-stream`)
+- **HTTP 400/404/405** for errors
+
+**Example**:
+```bash
+curl -N -H "Accept: text/event-stream" \
+  -H "Mcp-Session-Id: $SESSION_ID" \
+  http://localhost:3003/mcp
+```
+
+**SSE Format**:
+```
+id: 1234567890123
+data: {"jsonrpc":"2.0","method":"notification","params":{}}
+
+id: 1234567890124
+data: {"jsonrpc":"2.0","method":"another","params":{}}
+```
+
+**Heartbeat** (if enabled):
+```
+:ping
+```
+
+### DELETE /mcp - Terminate Session
+
+**Purpose**: Explicitly terminate session and cleanup resources
+
+**Headers**:
+- `Mcp-Session-Id: <session-id>` (required)
+
+**Response**:
+- **HTTP 204** (no content) on success
+- **HTTP 400/404** for errors
+
+**Example**:
+```bash
+curl -X DELETE http://localhost:3003/mcp \
+  -H "Mcp-Session-Id: $SESSION_ID"
+```
+
+### GET /health - Health Check
+
+**Purpose**: Check server health and session count
+
+**Response**:
+```json
+{
+  "status": "ok",
+  "sessions": 5
+}
+```
+
+**Example**:
+```bash
+curl http://localhost:3003/health
+```
+
+## Session Management
+
+### Session Lifecycle
+
+1. **Created**: On initialization (POST with `method: "initialize"`)
+2. **Active**: Session ID in `Mcp-Session-Id` header
+3. **Expired**: After `SESSION_TIMEOUT_MS` of inactivity (default: 30 minutes)
+4. **Terminated**: Explicit DELETE or server shutdown
+
+### Session Timeout
+
+```bash
+export SESSION_TIMEOUT_MS=1800000  # 30 minutes (default)
+export SESSION_TIMEOUT_MS=3600000  # 1 hour
+export SESSION_TIMEOUT_MS=600000   # 10 minutes
+```
+
+**Behavior**:
+- Activity tracked on every request
+- Expired sessions automatically cleaned up (every 1 minute)
+- Expired session requests return **HTTP 404**
+
+### Session Storage
+
+Sessions store:
+- Session ID (crypto-secure UUID)
+- Creation timestamp
+- Last activity timestamp
+- Active SSE streams (for resumability)
+
+## SSE Resumability
+
+Resume SSE streams after network disconnection.
+
+### How It Works
+
+1. **Server**: Assigns unique `id` to each SSE event
+2. **Client**: Tracks last received event ID
+3. **Reconnect**: Client sends `Last-Event-ID` header
+4. **Server**: Replays missed events (last 100 per stream)
+
+### Example
+
+**Initial connection**:
+```bash
+curl -N -H "Accept: text/event-stream" \
+  -H "Mcp-Session-Id: $SESSION_ID" \
+  http://localhost:3003/mcp
+```
+
+**Resume after disconnect**:
+```bash
+LAST_EVENT_ID="1234567890123"
+
+curl -N -H "Accept: text/event-stream" \
+  -H "Mcp-Session-Id: $SESSION_ID" \
+  -H "Last-Event-ID: $LAST_EVENT_ID" \
+  http://localhost:3003/mcp
+```
+
+Server replays events with `id > 1234567890123`.
+
+## Heartbeat Configuration
+
+Keep SSE connections alive through reverse proxies.
+
+```bash
+export HEARTBEAT_ENABLED=true
+export HEARTBEAT_INTERVAL_MS=30000  # 30 seconds
+```
+
+**Why**: Proxies (nginx, cloudflare) timeout idle connections
+**How**: Sends `:ping\n\n` comments (ignored by clients)
+**Default**: Disabled (enable only if needed)
+
+## Security
+
+### Origin Validation
+
+**Purpose**: Prevent DNS rebinding attacks
+
+**Behavior**:
+- Validates `Origin` header for non-localhost requests
+- Always allows: `localhost`, `127.0.0.1`, configured `MCP_HOST`
+- Additionally allows: Origins in `ALLOWED_ORIGINS` (if configured)
+- Rejects: Other origins with **HTTP 403**
+
+**Supported Formats**:
+
+```bash
+# Exact hostname
+export ALLOWED_ORIGINS="example.com,api.example.com"
+
+# Wildcard subdomain (*.domain.com)
+export ALLOWED_ORIGINS="*.company.com"  # Matches: api.company.com, web.company.com
+
+# IPv4 CIDR range (for corporate networks)
+export ALLOWED_ORIGINS="192.168.1.0/24"  # Matches: 192.168.1.1 - 192.168.1.254
+export ALLOWED_ORIGINS="10.0.0.0/8"      # Matches: 10.0.0.0 - 10.255.255.255
+
+# Combination (comma-separated)
+export ALLOWED_ORIGINS="example.com,*.company.com,192.168.1.0/24,10.0.0.0/8"
+```
+
+**Examples**:
+
+```bash
+# Allow specific subdomain
+ALLOWED_ORIGINS="api.company.com"
+
+# Allow all company subdomains
+ALLOWED_ORIGINS="*.company.com"
+
+# Allow branch offices (private networks)
+ALLOWED_ORIGINS="192.168.1.0/24,192.168.2.0/24,192.168.3.0/24"
+
+# Allow entire corporate /8 network
+ALLOWED_ORIGINS="10.0.0.0/8"
+
+# Mixed: public domains + private networks
+ALLOWED_ORIGINS="example.com,*.company.com,192.168.0.0/16,10.0.0.0/8"
+```
+
+**Skip**: Requests to `localhost` hostname always allowed without additional configuration
+
+### Localhost Binding
+
+**Default**: Server binds to `127.0.0.1` (localhost only)
+
+```bash
+export MCP_HOST=127.0.0.1  # Secure (default)
+export MCP_HOST=0.0.0.0    # Network access (use with caution!)
+```
+
+**Warning**: Logs warning when binding to `0.0.0.0`
+
+### Best Practices
+
+1. **Localhost first**: Use `127.0.0.1` unless remote access needed
+2. **HTTPS reverse proxy**: Use nginx/caddy with TLS for remote access
+3. **Firewall**: Restrict port access to trusted IPs
+4. **Strong tokens**: Use cryptographically secure API tokens
+5. **Monitor sessions**: Check `/health` endpoint regularly
+
+## Reverse Proxy Setup
+
+### nginx Example
+
+```nginx
+server {
+    listen 443 ssl http2;
+    server_name mcp.example.com;
+
+    ssl_certificate /path/to/cert.pem;
+    ssl_certificate_key /path/to/key.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:3003;
+        proxy_http_version 1.1;
+        
+        # SSE support
+        proxy_set_header Connection '';
+        chunked_transfer_encoding off;
+        proxy_buffering off;
+        proxy_cache off;
+        
+        # Headers
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        
+        # Timeouts
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 3600s;  # 1 hour for SSE
+    }
+}
+```
+
+**Enable heartbeat** to prevent proxy timeouts:
+```bash
+export HEARTBEAT_ENABLED=true
+```
+
+## Troubleshooting
+
+### Session not found (404)
+
+**Cause**: Session expired or never initialized
+**Solution**: Initialize first, check `SESSION_TIMEOUT_MS`
+
+```bash
+# Check timeout
+echo $SESSION_TIMEOUT_MS
+
+# Increase if needed
+export SESSION_TIMEOUT_MS=3600000  # 1 hour
+```
+
+### Origin not allowed (403)
+
+**Cause**: Origin validation rejected request
+**Solution**: Check Origin header, use allowed origin
+
+```bash
+# Check logs for rejected origin
+# Add origin to allowlist or use localhost
+```
+
+### Connection timeout
+
+**Cause**: Proxy timing out SSE stream
+**Solution**: Enable heartbeat
+
+```bash
+export HEARTBEAT_ENABLED=true
+export HEARTBEAT_INTERVAL_MS=30000
+```
+
+### Server not accessible remotely
+
+**Cause**: Binding to localhost only
+**Solution**: Bind to network interface
+
+```bash
+export MCP_HOST=0.0.0.0  # or specific IP
+```
+
+**Warning**: Ensure firewall protection!
+
+## Monitoring
+
+### Prometheus Metrics
+
+**Enable metrics** for production observability:
+
+```bash
+export METRICS_ENABLED=true
+export METRICS_PATH=/metrics  # Optional, default: /metrics
+npm start
+```
+
+**Metrics endpoint**:
+```bash
+curl http://localhost:3003/metrics
+```
+
+**Available metrics**:
+
+```prometheus
+# HTTP metrics
+mcp_http_requests_total{method,path,status}
+mcp_http_request_duration_seconds{method,path,status}
+
+# Session metrics
+mcp_sessions_active
+mcp_sessions_created_total
+mcp_sessions_destroyed_total
+
+# Tool call metrics
+mcp_tool_calls_total{tool,status}
+mcp_tool_call_duration_seconds{tool,status}
+mcp_tool_call_errors_total{tool,error_type}
+
+# API call metrics (to backend)
+mcp_api_calls_total{operation,status}
+mcp_api_call_duration_seconds{operation,status}
+mcp_api_call_errors_total{operation,error_type}
+```
+
+**Prometheus scrape config**:
+
+```yaml
+scrape_configs:
+  - job_name: 'mcp-server'
+    static_configs:
+      - targets: ['localhost:3003']
+    metrics_path: '/metrics'
+    scrape_interval: 15s
+```
+
+**Grafana dashboard ideas**:
+- Request rate & latency (p50, p95, p99)
+- Active sessions over time
+- Tool call success rate
+- Backend API error rate
+- Session timeout rate
+
+### Health Endpoint
+
+```bash
+curl http://localhost:3003/health
+```
+
+Response:
+```json
+{
+  "status": "ok",
+  "sessions": 3
+}
+```
+
+Monitor `sessions` count to detect leaks or issues.
+
+### Structured Logging
+
+**JSON format** (for log aggregation):
+```bash
+export LOG_FORMAT=json
+npm start
+```
+
+**Console format** (for debugging):
+```bash
+export LOG_FORMAT=console
+npm start
+```
+
+### Metrics (Phase 2)
+
+Prometheus metrics planned:
+- `mcp_requests_total`
+- `mcp_request_duration_seconds`
+- `mcp_active_sessions`
+- `mcp_tool_calls_total`
+
+## Performance
+
+### Concurrent Clients
+
+HTTP transport supports multiple concurrent clients with separate sessions.
+
+**Tested**: 100+ concurrent sessions
+**Limit**: System resources (memory, file descriptors)
+
+### Session Cleanup
+
+Expired sessions cleaned every 60 seconds.
+
+**Memory**: ~1KB per session (approx)
+**Recommendation**: Monitor with `/health` endpoint
+
+### SSE Message Queue
+
+Each stream buffers last 100 messages for resumability.
+
+**Memory**: ~10KB per active stream (approx)
+**Recommendation**: Close unused streams
+
+## Examples
+
+See [EXAMPLE-GITLAB.md](../EXAMPLE-GITLAB.md) for complete curl-based examples with GitLab API.
+
+## Related Documentation
+
+- [README.md](../README.md) - Project overview
+- [PROFILE-GUIDE.md](./PROFILE-GUIDE.md) - Creating profiles
+- [MCP Specification](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports) - Official spec
+

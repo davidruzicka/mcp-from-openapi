@@ -1,0 +1,47 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build artifacts
+dist/
+*.tsbuildinfo
+
+# Tests
+src/**/*.test.ts
+src/testing/
+
+# Scripts (CLI tools, not needed in container)
+scripts/
+
+# Documentation
+*.md
+!README.md
+docs/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# CI/CD
+.github/
+
+# Coverage
+coverage/
+
+# Temporary files
+tmp/
+temp/
+

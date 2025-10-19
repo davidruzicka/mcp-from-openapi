@@ -1,0 +1,257 @@
+/**
+ * Tests for HTTP interceptors (auth, rate-limit, retry)
+ * 
+ * Why: Validates auth types (bearer, query, custom-header), rate limiting, and retry logic
+ */
+
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { HttpClient, InterceptorChain } from './interceptors.js';
+import type { InterceptorConfig } from './types/profile.js';
+
+describe('HttpClient - Auth Interceptors', () => {
+  const originalEnv = { ...process.env };
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  it('should add Bearer token for bearer auth type', async () => {
+    process.env.API_TOKEN = 'test-bearer-token';
+
+    const config: InterceptorConfig = {
+      auth: {
+        type: 'bearer',
+        value_from_env: 'API_TOKEN',
+      },
+    };
+
+    const interceptors = new InterceptorChain(config);
+    const client = new HttpClient('https://api.example.com', interceptors);
+
+    // Mock fetch to capture request
+    let capturedHeaders: Record<string, string> = {};
+    global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+      capturedHeaders = init?.headers as Record<string, string>;
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    };
+
+    await client.request('GET', '/test');
+
+    expect(capturedHeaders['Authorization']).toBe('Bearer test-bearer-token');
+  });
+
+  it('should add custom header for custom-header auth type', async () => {
+    process.env.API_KEY = 'test-api-key';
+
+    const config: InterceptorConfig = {
+      auth: {
+        type: 'custom-header',
+        header_name: 'X-API-Key',
+        value_from_env: 'API_KEY',
+      },
+    };
+
+    const interceptors = new InterceptorChain(config);
+    const client = new HttpClient('https://api.example.com', interceptors);
+
+    let capturedHeaders: Record<string, string> = {};
+    global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+      capturedHeaders = init?.headers as Record<string, string>;
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    };
+
+    await client.request('GET', '/test');
+
+    expect(capturedHeaders['X-API-Key']).toBe('test-api-key');
+  });
+
+  it('should add query param for query auth type', async () => {
+    process.env.API_TOKEN = 'test-query-token';
+
+    const config: InterceptorConfig = {
+      auth: {
+        type: 'query',
+        query_param: 'api_key',
+        value_from_env: 'API_TOKEN',
+      },
+    };
+
+    const interceptors = new InterceptorChain(config);
+    const client = new HttpClient('https://api.example.com', interceptors);
+
+    let capturedUrl = '';
+    global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+      capturedUrl = url.toString();
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    };
+
+    await client.request('GET', '/test');
+
+    expect(capturedUrl).toContain('api_key=test-query-token');
+  });
+
+  it('should throw error if auth token env var is missing', () => {
+    delete process.env.MISSING_TOKEN;
+
+    const config: InterceptorConfig = {
+      auth: {
+        type: 'bearer',
+        value_from_env: 'MISSING_TOKEN',
+      },
+    };
+
+    expect(() => new InterceptorChain(config)).toThrow(
+      'Auth token not found in environment variable: MISSING_TOKEN'
+    );
+  });
+
+  it('should work without auth if not configured', async () => {
+    const config: InterceptorConfig = {};
+
+    const interceptors = new InterceptorChain(config);
+    const client = new HttpClient('https://api.example.com', interceptors);
+
+    let capturedHeaders: Record<string, string> = {};
+    global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+      capturedHeaders = init?.headers as Record<string, string>;
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    };
+
+    await client.request('GET', '/test');
+
+    expect(capturedHeaders['Authorization']).toBeUndefined();
+    expect(capturedHeaders['X-API-Key']).toBeUndefined();
+  });
+});
+
+describe('HttpClient - Rate Limiting', () => {
+  it('should create rate limit interceptor when configured', () => {
+    const config: InterceptorConfig = {
+      rate_limit: {
+        max_requests_per_minute: 60,
+      },
+    };
+
+    const interceptors = new InterceptorChain(config);
+    
+    // Just verify it initializes without error
+    expect(interceptors).toBeDefined();
+    expect(interceptors.config.rate_limit).toEqual({ max_requests_per_minute: 60 });
+  });
+});
+
+describe('HttpClient - Retry Logic', () => {
+  it('should retry on 429 status with exponential backoff', async () => {
+    const config: InterceptorConfig = {
+      retry: {
+        max_attempts: 3,
+        backoff_ms: [100, 200, 400],
+        retry_on_status: [429],
+      },
+    };
+
+    const interceptors = new InterceptorChain(config);
+    const client = new HttpClient('https://api.example.com', interceptors);
+
+    let attemptCount = 0;
+    global.fetch = async () => {
+      attemptCount++;
+      if (attemptCount < 3) {
+        return new Response(null, { status: 429 });
+      }
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    };
+
+    const result = await client.request('GET', '/test');
+
+    expect(attemptCount).toBe(3);
+    expect(result.status).toBe(200);
+  });
+
+  it('should throw after max retry attempts', async () => {
+    const config: InterceptorConfig = {
+      retry: {
+        max_attempts: 2,
+        backoff_ms: [50, 100],
+        retry_on_status: [502],
+      },
+    };
+
+    const interceptors = new InterceptorChain(config);
+    const client = new HttpClient('https://api.example.com', interceptors);
+
+    global.fetch = async () => new Response(null, { status: 502 });
+
+    await expect(
+      client.request('GET', '/test')
+    ).rejects.toThrow('HTTP 502');
+  });
+});
+
+describe('HttpClient - Array Serialization', () => {
+  beforeEach(() => {
+    process.env.API_TOKEN = 'test-token';
+  });
+
+  it('should serialize arrays with brackets format', async () => {
+    const config: InterceptorConfig = {
+      auth: { type: 'bearer', value_from_env: 'API_TOKEN' },
+      array_format: 'brackets',
+    };
+
+    const interceptors = new InterceptorChain(config);
+    const client = new HttpClient('https://api.example.com', interceptors);
+
+    let capturedUrl = '';
+    global.fetch = async (url: RequestInfo | URL) => {
+      capturedUrl = url.toString();
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    };
+
+    await client.request('GET', '/test', {
+      params: { scope: ['a', 'b'] },
+    });
+
+    expect(decodeURIComponent(capturedUrl)).toContain('scope[]=a');
+    expect(decodeURIComponent(capturedUrl)).toContain('scope[]=b');
+  });
+
+  it('should serialize arrays with comma format', async () => {
+    const config: InterceptorConfig = {
+      auth: { type: 'bearer', value_from_env: 'API_TOKEN' },
+      array_format: 'comma',
+    };
+
+    const interceptors = new InterceptorChain(config);
+    const client = new HttpClient('https://api.example.com', interceptors);
+
+    let capturedUrl = '';
+    global.fetch = async (url: RequestInfo | URL) => {
+      capturedUrl = url.toString();
+      return new Response(JSON.stringify({ ok: true }), { status: 200 });
+    };
+
+    await client.request('GET', '/test', {
+      params: { scope: ['a', 'b', 'c'] },
+    });
+
+    expect(decodeURIComponent(capturedUrl)).toContain('scope=a,b,c');
+  });
+});
+
