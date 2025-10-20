@@ -10,9 +10,9 @@ Transform any OpenAPI specification into MCP tools **without writing code**. Con
 
 ### Core
 - **Any OpenAPI API**: Works with OpenAPI 3.x specifications
-- **Tool Aggregation**: Reduce tool clutter - group related operations (e.g., `manage_badges` instead of 5 separate tools)
-- **Composite Actions**: Chain API calls into workflows (fetch merge request + comments + attachments as one)
-- **Profiles**: JSON configuration for different use cases (admin/developer/readonly/custom)
+- **Tool Aggregation**: Reduce tool clutter - group related operations
+- **Composite Actions**: Chain API calls into workflows
+- **Profiles**: Create JSON configuration for different use cases (admin/developer/readonly/custom)
 
 ### Production Ready
 - **Dual Transport**: stdio (local) or HTTP streaming (remote) - switch via env variable
@@ -22,14 +22,13 @@ Transform any OpenAPI specification into MCP tools **without writing code**. Con
 - **Observability**: Structured logging (console/JSON) with profile-aware token redaction, Prometheus metrics
 
 ### Developer Experience
-- **152 tests passing** (104 unit + 48 integration) - 100% pass rate
-- **Type-safe**: Full TypeScript with strict mode
+- **Type-safe**: Full TypeScript (almost) with strict mode
 - **Well documented**: Guides, examples, inline comments
 - **Mock server**: Test without real API access
 
 ## Use Cases
 
-1. **Less Context Pollution**: Fewer tools = more relevant context for LLM
+1. **Less Context Pollution**: Fewer tools with filtered response fields = more relevant context for LLM
 2. **Multi-Environment**: Same server, different profiles (dev/staging/prod)
 3. **Custom Workflows**: Composite tools for common multi-step operations
 4. **Any API**: Works with any OpenAPI 3.x specification
@@ -47,7 +46,7 @@ docker build -t mcp-from-openapi .
 ```bash
 # Copy and edit environment file
 cp .env.example .env
-# Edit .env with your API_TOKEN and API_BASE_URL
+# Edit .env with your API_TOKEN (for stdio) and API_BASE_URL and other settings
 
 # Start server
 docker-compose --env-file .env up -d
@@ -56,19 +55,7 @@ docker-compose --env-file .env up -d
 curl http://localhost:3003/health
 ```
 
-**3. Or run with docker:**
-```bash
-docker run -d \
-  -p 3003:3003 \
-  -v $(pwd)/profiles:/app/profiles:ro \
-  -e OPENAPI_SPEC_PATH=/app/profiles/gitlab/openapi.yaml \
-  -e MCP_PROFILE_PATH=/app/profiles/gitlab/developer-profile.json \
-  -e API_TOKEN=your_token \
-  -e API_BASE_URL=https://api.example.com \
-  mcp-from-openapi
-```
-
-See [docs/DOCKER.md](./docs/DOCKER.md) for production deployment, security, monitoring.
+See [docs/DOCKER.md](./docs/DOCKER.md) for authentication modes, production deployment, and security.
 
 ### Option B: Local Development
 
@@ -86,61 +73,16 @@ cp .env.example .env
 
 **3. Run:**
 ```bash
-# stdio transport (local)
-npm start
-
-# HTTP transport (remote)
-export MCP_TRANSPORT=http
 npm start
 ```
 
-## Transport Options
-
-### stdio Transport (Local)
-Best for: MCP desktop clients, local development
-
-**Native:**
-```bash
-export MCP_TRANSPORT=stdio
-npm start
-```
-
-**Pros**: Simple, secure, no network configuration
-**Cons**: Single local client only
-
-### HTTP Transport (Remote)
-Best for: Remote access, multiple clients, load balancing, Docker
-
-**Docker (recommended):**
-```bash
-docker-compose up -d
-# Access at http://localhost:3003
-```
-
-**Native:**
-```bash
-export MCP_TRANSPORT=http
-export MCP_HOST=127.0.0.1      # or 0.0.0.0 for network access
-export MCP_PORT=3003
-npm start
-```
-
-**Features**:
-- MCP Specification 2025-03-26 compliant
-- SSE streaming with resumability
-- Session management with auto-cleanup
-- Origin validation (DNS rebinding protection)
-- Optional heartbeat for proxy keepalive
-
-**Documentation**:
-- [docs/HTTP-TRANSPORT.md](./docs/HTTP-TRANSPORT.md) - HTTP protocol guide
-- [docs/DOCKER.md](./docs/DOCKER.md) - Docker deployment guide
+See [docs/HTTP-TRANSPORT.md](./docs/HTTP-TRANSPORT.md) for transport options (stdio vs HTTP) and authentication modes.
 
 ## Environment Variables
 
 ### Required
 - `OPENAPI_SPEC_PATH`: Path to OpenAPI spec (YAML/JSON)
-- `API_TOKEN`: API authentication token
+- `API_TOKEN`: API token (required for stdio, optional for HTTP with per-session tokens)
 
 ### Optional - Core
 - `MCP_PROFILE_PATH`: Profile JSON path (default: all tools defined from OpenAPI spec)
@@ -165,48 +107,15 @@ npm start
 
 ## Profile System
 
-Profiles define which MCP tools to expose and how to aggregate them.
+Profiles define which MCP tools to expose and how to aggregate them. **Start with existing profiles** from `profiles/` (e.g., GitLab).
 
-### Structure
+**Features:**
+- Tool aggregation (group related operations)
+- Response field filtering (reduce LLM context)
+- Composite actions (chain API calls)
+- Rate limiting & retry logic
 
-```json
-{
-  "$schema": "../../../profile-schema.json",
-  "name": "developer-profile",
-  "description": "Tools for developers",
-  "tools": [
-    {
-      "name": "manage_badges",
-      "description": "Manage project badges",
-      "operations": {
-        "list": "listProjectBadges",
-        "get": "getProjectBadge",
-        "create": "createProjectBadge",
-        "update": "updateProjectBadge",
-        "delete": "deleteProjectBadge"
-      }
-    }
-  ],
-  "interceptors": {
-    "auth": {
-      "type": "bearer",
-      "variable_name": "API_TOKEN"
-    },
-    "rate_limit": {
-      "requests_per_second": 10
-    }
-  }
-}
-```
-
-### Profile Features
-
-- **Parameter Aliases**: Map `id` → `project_id`, `group_id`, etc.
-- **Metadata Params**: Exclude `action`, `resource_type` from API requests
-- **Array Format**: Configure query param serialization (`brackets`, `indices`, `repeat`, `comma`)
-- **Partial Results**: Composite tools can return partial data on step failures
-
-See `profiles/examples/` for complete examples.
+**Create your own profiles**: See [docs/PROFILE-GUIDE.md](./docs/PROFILE-GUIDE.md)
 
 ## Testing & Validation
 
@@ -244,6 +153,10 @@ npm test
 - Session management & SSE resumability
 - Profile system with validation
 - Prometheus metrics (HTTP, sessions, tools, API calls)
+
+## Contributing
+
+See [`CONTRIBUTING.md`](./CONTRIBUTING.md) for development guidelines.
 
 ## License
 

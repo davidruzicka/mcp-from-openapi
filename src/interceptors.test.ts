@@ -114,7 +114,7 @@ describe('HttpClient - Auth Interceptors', () => {
     };
 
     expect(() => new InterceptorChain(config)).toThrow(
-      'Auth token not found in environment variable: MISSING_TOKEN'
+      'Auth token not found. Expected in environment variable: MISSING_TOKEN or passed to constructor'
     );
   });
 

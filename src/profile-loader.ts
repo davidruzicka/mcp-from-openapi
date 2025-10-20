@@ -3,6 +3,15 @@
  * 
  * Why validation: Profile config comes from user files. Invalid config would
  * cause runtime errors. Validate upfront with clear error messages.
+ * 
+ * ⚠️ CRITICAL: Zod schemas MUST stay in sync with TypeScript types!
+ * When adding fields to src/types/profile.ts:
+ * 1. Update TypeScript interface (compile-time checking)
+ * 2. Update profile-schema.json (JSON validation)
+ * 3. Update Zod schemas below (runtime validation)
+ * 
+ * Missing Zod fields = silently removed from parsed profiles!
+ * See IMPLEMENTATION.md for details.
  */
 
 import fs from 'fs/promises';
@@ -37,6 +46,7 @@ const ToolDefSchema = z.object({
   partial_results: z.boolean().optional(),
   parameters: z.record(ParameterDefSchema),
   metadata_params: z.array(z.string()).optional(),
+  response_fields: z.record(z.array(z.string())).optional(),
 });
 
 const AuthInterceptorSchema = z.object({
@@ -96,7 +106,7 @@ export class ProfileLoader {
     const json = JSON.parse(content);
     
     // Validate with Zod - throws detailed error if invalid
-    const profile = ProfileSchema.parse(json);
+    const profile = ProfileSchema.parse(json) as Profile;
     
     this.validateLogic(profile);
     

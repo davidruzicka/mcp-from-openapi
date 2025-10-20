@@ -33,6 +33,29 @@ export class MCPServer {
   private schemaValidator: SchemaValidator;
   private logger: Logger;
   private httpTransport: any = null;
+  private sessionHttpClients: Map<string, HttpClient> = new Map();
+
+  /**
+   * Filter response object to include only specified fields
+   * Supports nested objects but keeps first level of arrays
+   */
+  private filterFields(data: unknown, fields: string[]): unknown {
+    if (!data || typeof data !== 'object') {
+      return data;
+    }
+
+    if (Array.isArray(data)) {
+      return data.map(item => this.filterFields(item, fields));
+    }
+
+    const filtered: Record<string, unknown> = {};
+    for (const field of fields) {
+      if (field in data) {
+        filtered[field] = (data as Record<string, unknown>)[field];
+      }
+    }
+    return filtered;
+  }
 
   constructor(logger?: Logger) {
     this.logger = logger || new ConsoleLogger();
@@ -80,10 +103,26 @@ export class MCPServer {
     }
 
     // Setup HTTP client with interceptors
+    // For stdio transport, create client with env token
+    // For HTTP transport, clients are created per-session with user's token
     const baseUrl = this.getBaseUrl();
-    const interceptors = new InterceptorChain(this.profile.interceptors || {});
-    this.httpClient = new HttpClient(baseUrl, interceptors);
-    this.compositeExecutor = new CompositeExecutor(this.parser, this.httpClient);
+    if (this.profile.interceptors?.auth) {
+      const envToken = process.env[this.profile.interceptors.auth.value_from_env];
+      if (envToken) {
+        // Token available in env - create global client (stdio transport)
+        const interceptors = new InterceptorChain(this.profile.interceptors);
+        this.httpClient = new HttpClient(baseUrl, interceptors);
+        this.compositeExecutor = new CompositeExecutor(this.parser, this.httpClient);
+      } else {
+        // No env token - will use per-session clients (HTTP transport)
+        this.compositeExecutor = new CompositeExecutor(this.parser);
+      }
+    } else {
+      // No auth configured
+      const interceptors = new InterceptorChain(this.profile.interceptors || {});
+      this.httpClient = new HttpClient(baseUrl, interceptors);
+      this.compositeExecutor = new CompositeExecutor(this.parser, this.httpClient);
+    }
     
     this.logger.info('MCP server initialized', {
       baseUrl,
@@ -120,6 +159,99 @@ export class MCPServer {
     }
 
     return this.parser.getBaseUrl();
+  }
+
+  /**
+   * Get or create HTTP client for session
+   */
+  private getHttpClientForSession(sessionId?: string): HttpClient {
+    if (!sessionId) {
+      // Fallback to global client for stdio transport
+      if (!this.httpClient) {
+        const hasHttpTransport = !!this.httpTransport;
+        const transport = hasHttpTransport ? 'http' : 'stdio';
+        const authConfig = this.profile?.interceptors?.auth;
+        const envVarName = authConfig?.value_from_env || 'API_TOKEN';
+        const hasEnvToken = !!process.env[envVarName];
+        
+        throw new Error(
+          `HTTP client not initialized. ` +
+          `Transport: ${transport}, ` +
+          `HasEnvToken(${envVarName}): ${hasEnvToken}, ` +
+          `Suggestion: ${hasHttpTransport 
+            ? 'Send token in Authorization header during initialization' 
+            : `Set ${envVarName} environment variable`}`
+        );
+      }
+      return this.httpClient;
+    }
+
+    // Check cache first
+    let client = this.sessionHttpClients.get(sessionId);
+    if (client) {
+      return client;
+    }
+
+    // Get auth token from session or env
+    const authToken = this.getAuthTokenFromSession(sessionId);
+    const envToken = this.profile?.interceptors?.auth 
+      ? process.env[this.profile.interceptors.auth.value_from_env]
+      : undefined;
+    
+    if (!authToken && !envToken) {
+      const authConfig = this.profile?.interceptors?.auth;
+      const expectedEnvVar = authConfig?.value_from_env || 'API_TOKEN';
+      throw new Error(
+        `No auth token found for session ${sessionId}. ` +
+        `Expected token in Authorization/X-API-Token header or ${expectedEnvVar} env var`
+      );
+    }
+
+    // Create new client with session-specific interceptor
+    if (!this.profile) {
+      throw new Error('Profile not initialized');
+    }
+    
+    const baseUrl = this.getBaseUrl();
+    const tokenToUse = authToken || envToken;
+    const interceptors = new InterceptorChain(this.profile.interceptors || {}, tokenToUse);
+    const newClient = new HttpClient(baseUrl, interceptors);
+
+    // Double-check: Another concurrent request might have created client
+    // Race condition prevention: Use first client that was set
+    const existingClient = this.sessionHttpClients.get(sessionId);
+    if (existingClient) {
+      // Another request won the race, use its client
+      return existingClient;
+    }
+
+    // We won the race, cache our client
+    this.sessionHttpClients.set(sessionId, newClient);
+    return newClient;
+  }
+
+  /**
+   * Get auth token from HTTP transport session
+   */
+  private getAuthTokenFromSession(sessionId: string): string | undefined {
+    if (!this.httpTransport) {
+      return undefined;
+    }
+
+    // Use public API instead of type casting
+    return this.httpTransport.getSessionToken(sessionId);
+  }
+
+  /**
+   * Cleanup HTTP client for destroyed session
+   * 
+   * Why: Prevent memory leak - sessions expire but cached clients stay forever
+   */
+  private cleanupSessionClient(sessionId: string): void {
+    const removed = this.sessionHttpClients.delete(sessionId);
+    if (removed) {
+      this.logger.info('Cleaned up session HTTP client', { sessionId });
+    }
   }
 
   /**
@@ -192,13 +324,14 @@ export class MCPServer {
 
   /**
    * Execute simple (non-composite) tool
-   * 
+   *
    * Why separate: Simple tools map directly to single OpenAPI operation.
    * No result aggregation needed.
    */
   private async executeSimpleTool(
     toolDef: ToolDefinition,
-    args: Record<string, unknown>
+    args: Record<string, unknown>,
+    sessionId?: string
   ): Promise<unknown> {
     const operationId = this.toolGenerator.mapActionToOperation(toolDef, args);
     
@@ -230,13 +363,24 @@ export class MCPServer {
       }
     }
 
-    // Execute
-    const response = await this.httpClient!.request(operation.method, path, {
+    // Execute with session-specific client
+    const httpClient = this.getHttpClientForSession(sessionId);
+    const response = await httpClient.request(operation.method, path, {
       params: queryParams,
       body,
     });
 
-    return response.body;
+    // Apply response field filtering if configured
+    let result = response.body;
+    if (toolDef.response_fields) {
+      const action = args.action as string | undefined;
+      if (action && toolDef.response_fields[action]) {
+        const fields = toolDef.response_fields[action];
+        result = this.filterFields(result, fields);
+      }
+    }
+
+    return result;
   }
 
   /**
@@ -372,8 +516,13 @@ export class MCPServer {
     this.httpTransport = new HttpTransport(config, this.logger);
     
     // Set message handler to process JSON-RPC messages
-    this.httpTransport.setMessageHandler(async (message: unknown) => {
-      return await this.handleJsonRpcMessage(message);
+    this.httpTransport.setMessageHandler(async (message: unknown, sessionId?: string) => {
+      return await this.handleJsonRpcMessage(message, sessionId);
+    });
+
+    // Register cleanup listener for session destruction (memory leak prevention)
+    this.httpTransport.onSessionDestroyed((sessionId: string) => {
+      this.cleanupSessionClient(sessionId);
     });
 
     await this.httpTransport.start();
@@ -383,10 +532,10 @@ export class MCPServer {
 
   /**
    * Handle JSON-RPC message from HTTP transport
-   * 
+   *
    * Why: Unified message handling for both stdio and HTTP transports
    */
-  private async handleJsonRpcMessage(message: unknown): Promise<unknown> {
+  private async handleJsonRpcMessage(message: unknown, sessionId?: string): Promise<unknown> {
     // Handle initialize
     if (this.isInitializeRequest(message)) {
       return this.handleInitialize(message);
@@ -394,7 +543,7 @@ export class MCPServer {
 
     // Handle tool calls
     if (this.isToolCallRequest(message)) {
-      return await this.handleToolCall(message);
+      return await this.handleToolCall(message, sessionId);
     }
 
     // Handle other JSON-RPC requests
@@ -432,7 +581,7 @@ export class MCPServer {
     };
   }
 
-  private async handleToolCall(message: unknown): Promise<unknown> {
+  private async handleToolCall(message: unknown, sessionId?: string): Promise<unknown> {
     const req = message as Record<string, unknown>;
     const params = req.params as Record<string, unknown>;
     const toolName = params.name as string;
@@ -448,10 +597,12 @@ export class MCPServer {
       // Execute tool (reuse existing execution logic)
       let result;
       if (toolDef.composite && toolDef.steps) {
+        const httpClient = this.getHttpClientForSession(sessionId);
         const compositeResult = await this.compositeExecutor!.execute(
           toolDef.steps,
           args,
-          toolDef.partial_results || false
+          toolDef.partial_results || false,
+          httpClient
         );
         result = {
           data: compositeResult.data,
@@ -461,7 +612,7 @@ export class MCPServer {
           errors: compositeResult.errors,
         };
       } else {
-        result = await this.executeSimpleTool(toolDef, args);
+        result = await this.executeSimpleTool(toolDef, args, sessionId);
       }
 
       return {

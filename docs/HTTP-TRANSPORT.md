@@ -18,7 +18,9 @@ HTTP Streamable transport enables remote MCP server access with SSE streaming, s
 
 ## Quick Start
 
-### Basic Setup
+### Single-User Mode (Simple Setup)
+
+Best for: Testing, development, single-user servers
 
 ```bash
 # Set environment
@@ -37,12 +39,19 @@ Server will log:
 {"timestamp":"...","level":"info","message":"HTTP transport started","host":"127.0.0.1","port":3003}
 ```
 
-### Remote Access Setup
+**All clients share the same API_TOKEN from environment.**
+
+### Multi-User Mode (Remote Access)
+
+Best for: Production, multiple users with different tokens
 
 ```bash
-# Allow network access (use with caution!)
+# Allow network access
+export MCP_TRANSPORT=http
 export MCP_HOST=0.0.0.0
 export MCP_PORT=3003
+export API_BASE_URL=https://api.example.com
+# Note: No API_TOKEN in environment
 
 # Configure allowed origins (for corporate networks)
 export ALLOWED_ORIGINS="example.com,*.company.com,192.168.1.0/24,10.0.0.0/8"
@@ -53,6 +62,8 @@ export HEARTBEAT_INTERVAL_MS=30000  # 30 seconds
 
 npm start
 ```
+
+**Each client sends their own token in `Authorization: Bearer <token>` header during initialization.**
 
 **Security Warning**: When binding to `0.0.0.0`, ensure firewall protection, configure `ALLOWED_ORIGINS`, and use HTTPS reverse proxy.
 
@@ -84,6 +95,7 @@ Source: https://modelcontextprotocol.io/specification/2025-03-26/basic/transport
 - `Content-Type: application/json` (required)
 - `Accept: application/json` or `text/event-stream` (required)
 - `Mcp-Session-Id: <session-id>` (required except for initialization)
+- `Authorization: Bearer <token>` or `X-API-Token: <token>` (required for initialization if not using env var)
 
 **Request Body**:
 - Single JSON-RPC request/notification/response
@@ -100,6 +112,7 @@ Source: https://modelcontextprotocol.io/specification/2025-03-26/basic/transport
 curl -X POST http://localhost:3003/mcp \
   -H "Content-Type: application/json" \
   -H "Accept: application/json" \
+  -H "Authorization: Bearer your_gitlab_token" \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,
@@ -112,6 +125,15 @@ curl -X POST http://localhost:3003/mcp \
       }
     }
   }'
+```
+
+**Alternative with X-API-Token header**:
+```bash
+curl -X POST http://localhost:3003/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -H "X-API-Token: your_gitlab_token" \
+  -d '{...}'
 ```
 
 **Response**:

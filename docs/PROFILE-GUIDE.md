@@ -604,6 +604,50 @@ See working examples in `profiles/examples/`:
   - Bearer auth
   - Rate limiting & retry
 
+## Important: Schema Synchronization
+
+**⚠️ When adding new fields to `ToolDefinition` or `Profile` types:**
+
+1. **Update TypeScript types** in `src/types/profile.ts`
+2. **Update JSON Schema** in `profile-schema.json` (for validation)
+3. **⚠️ CRITICAL: Update Zod schemas** in `src/profile-loader.ts`
+
+**Why all three?**
+- TypeScript types: IDE support, type safety
+- JSON Schema: Profile validation, IDE auto-complete
+- **Zod schemas: Runtime validation** - **if missing, the field will be silently removed during profile parsing!**
+
+**Example: Adding `response_fields`**
+
+```typescript
+// 1. src/types/profile.ts
+export interface ToolDefinition {
+  // ... existing fields ...
+  response_fields?: Record<string, string[]>;
+}
+
+// 2. profile-schema.json
+{
+  "properties": {
+    "response_fields": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": { "type": "string" }
+      }
+    }
+  }
+}
+
+// 3. src/profile-loader.ts (⚠️ CRITICAL!)
+const ToolDefSchema = z.object({
+  // ... existing fields ...
+  response_fields: z.record(z.array(z.string())).optional(),
+});
+```
+
+**Debugging tip:** If a profile field is ignored at runtime, check if it's in the Zod schema!
+
 ## Next Steps
 
 1. Study the GitLab example profile
@@ -617,5 +661,6 @@ See working examples in `profiles/examples/`:
 - [OpenAPI Specification](https://spec.openapis.org/oas/v3.1.0)
 - [JSON Schema](https://json-schema.org/)
 - [MCP SDK Documentation](https://github.com/microsoft/mcp-sdk)
+- [Zod Documentation](https://zod.dev/)
 - Profile Schema: `profile-schema.json`
 

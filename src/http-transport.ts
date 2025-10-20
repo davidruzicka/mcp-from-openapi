@@ -29,7 +29,7 @@ export class HttpTransport {
   private logger: Logger;
   private metrics: MetricsCollector | null = null;
   private cleanupInterval: NodeJS.Timeout | null = null;
-  private messageHandler: ((message: unknown) => Promise<unknown>) | null = null;
+  private messageHandler: ((message: unknown, sessionId?: string) => Promise<unknown>) | null = null;
 
   constructor(config: HttpTransportConfig, logger: Logger) {
     this.config = config;
@@ -283,6 +283,55 @@ export class HttpTransport {
   }
 
   /**
+   * Validate token format and length
+   * 
+   * Why centralized: Single source of truth for token validation rules
+   */
+  private validateToken(token: string, source: string): void {
+    if (token.length > 1000) {
+      throw new Error(`${source} too long (max 1000 characters)`);
+    }
+    // RFC 6750 Bearer token characters + common API token chars
+    if (!/^[A-Za-z0-9\-._~+/]+=*$/.test(token)) {
+      throw new Error(`Invalid ${source} format`);
+    }
+  }
+
+  /**
+   * Extract and validate auth token from request headers
+   * 
+   * Supports:
+   * - Authorization: Bearer <token>
+   * - X-API-Token: <token>
+   * 
+   * Why strict validation: Prevents header injection attacks
+   */
+  private extractAuthToken(req: McpRequest): string | undefined {
+    const authHeader = req.headers.authorization;
+    if (authHeader) {
+      // Strict Bearer token format validation
+      const match = authHeader.match(/^Bearer\s+([A-Za-z0-9\-._~+/]+=*)$/);
+      if (!match) {
+        throw new Error('Invalid Authorization header format. Expected: Bearer <token>');
+      }
+      const token = match[1];
+      this.validateToken(token, 'Authorization token');
+      return token;
+    }
+    
+    const apiTokenHeader = req.headers['x-api-token'];
+    if (apiTokenHeader) {
+      if (typeof apiTokenHeader !== 'string') {
+        throw new Error('X-API-Token must be a string');
+      }
+      this.validateToken(apiTokenHeader, 'X-API-Token');
+      return apiTokenHeader;
+    }
+    
+    return undefined;
+  }
+
+  /**
    * Handle POST requests - Client sending messages to server
    * 
    * MCP Spec: POST can contain requests, notifications, or responses
@@ -335,12 +384,14 @@ export class HttpTransport {
           return;
         }
 
-        const response = await this.messageHandler(body);
+        const response = await this.messageHandler(body, sessionId);
 
         // Create session on initialization
         let newSessionId: string | undefined;
         if (isInitialization) {
-          newSessionId = this.createSession();
+          // Extract and validate auth token from headers
+          const authToken = this.extractAuthToken(req);
+          newSessionId = this.createSession(authToken);
         }
 
         // Check if client prefers SSE stream
@@ -637,25 +688,31 @@ export class HttpTransport {
 
   /**
    * Create new session
-   * 
+   *
    * Why: Stateful sessions for MCP protocol
    */
-  private createSession(): string {
+  private createSession(authToken?: string): string {
+    // Validate token if provided (defense in depth)
+    if (authToken) {
+      this.validateToken(authToken, 'Session auth token');
+    }
+    
     const sessionId = crypto.randomUUID();
     const session: SessionData = {
       id: sessionId,
       createdAt: Date.now(),
       lastActivityAt: Date.now(),
       sseStreams: new Map(),
+      authToken,
     };
     this.sessions.set(sessionId, session);
-    this.logger.info('Session created', { sessionId });
-    
+    this.logger.info('Session created', { sessionId, hasAuthToken: !!authToken });
+
     // Record metrics
     if (this.metrics) {
       this.metrics.recordSessionCreated();
     }
-    
+
     return sessionId;
   }
 
@@ -686,9 +743,39 @@ export class HttpTransport {
       this.sessions.delete(sessionId);
       this.logger.info('Session destroyed', { sessionId });
       
+      // Notify session destruction listeners (for cleanup in MCPServer)
+      this.notifySessionDestroyed(sessionId);
+      
       // Record metrics
       if (this.metrics) {
         this.metrics.recordSessionDestroyed();
+      }
+    }
+  }
+
+  /**
+   * Session destruction listeners for cleanup in other components
+   */
+  private sessionDestroyedListeners: Array<(sessionId: string) => void> = [];
+
+  /**
+   * Register listener for session destruction events
+   * 
+   * Why: Allows MCPServer to cleanup per-session HTTP clients
+   */
+  public onSessionDestroyed(listener: (sessionId: string) => void): void {
+    this.sessionDestroyedListeners.push(listener);
+  }
+
+  /**
+   * Notify all listeners about session destruction
+   */
+  private notifySessionDestroyed(sessionId: string): void {
+    for (const listener of this.sessionDestroyedListeners) {
+      try {
+        listener(sessionId);
+      } catch (error) {
+        this.logger.error('Session destroyed listener error', error as Error);
       }
     }
   }
@@ -720,9 +807,19 @@ export class HttpTransport {
 
 
   /**
+   * Get auth token from session
+   * 
+   * Why public: Allows MCPServer to securely access session tokens without breaking encapsulation
+   */
+  public getSessionToken(sessionId: string): string | undefined {
+    const session = this.sessions.get(sessionId);
+    return session?.authToken;
+  }
+
+  /**
    * Set message handler for processing incoming JSON-RPC messages
    */
-  public setMessageHandler(handler: (message: unknown) => Promise<unknown>): void {
+  public setMessageHandler(handler: (message: unknown, sessionId?: string) => Promise<unknown>): void {
     this.messageHandler = handler;
   }
 

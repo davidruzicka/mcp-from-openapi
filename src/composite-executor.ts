@@ -27,22 +27,23 @@ export interface StepError {
 export class CompositeExecutor {
   constructor(
     private parser: OpenAPIParser,
-    private httpClient: HttpClient
+    private httpClient?: HttpClient
   ) {}
 
   /**
    * Execute a series of API calls and merge results
-   * 
+   *
    * Why sequential: Steps may depend on previous results (e.g., get MR ID, then fetch comments).
    * Could parallelize independent steps in future optimization.
-   * 
+   *
    * Supports partial results: If allowPartial=true, continues after errors and returns
    * what was completed. Useful for composite actions where some data is better than none.
    */
   async execute(
     steps: CompositeStep[],
     args: Record<string, unknown>,
-    allowPartial: boolean = false
+    allowPartial: boolean = false,
+    httpClient?: HttpClient
   ): Promise<CompositeResult> {
     const result: Record<string, unknown> = {};
     const errors: StepError[] = [];
@@ -62,7 +63,11 @@ export class CompositeExecutor {
         const resolvedPath = this.resolvePath(path, args);
         
         // Execute request
-        const response = await this.httpClient.request(method, resolvedPath, {
+        const client = httpClient || this.httpClient;
+        if (!client) {
+          throw new Error('HTTP client not provided');
+        }
+        const response = await client.request(method, resolvedPath, {
           params: this.extractQueryParams(operation, args),
         });
 

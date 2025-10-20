@@ -30,6 +30,9 @@ export interface ToolDefinition {
   
   // Parameters that are metadata (don't go to API body)
   metadata_params?: string[]; // default: ['action', 'resource_type']
+  
+  // Response field filtering (reduces verbosity for list operations)
+  response_fields?: Record<string, string[]>; // e.g., {"list": ["id", "name", "path"]}
 }
 
 export interface ParameterDefinition {

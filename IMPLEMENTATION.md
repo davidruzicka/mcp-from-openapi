@@ -21,6 +21,7 @@
          │            - Validates profile JSON with Zod
          │            - Checks semantic rules
          │            - Default profile generation
+         │            ⚠️  Zod schemas MUST be kept in sync with TypeScript types!
          │
          ├──────────► Tool Generator (tool-generator.ts)
          │            - Generates MCP tools from profile
@@ -386,4 +387,32 @@ See [TODO.md](./TODO.md) for detailed implementation plans.
    - Based on youtrack-mcp aggregation approach
    - MCP SDK handles protocol complexity
    - Standard TypeScript tooling (Vitest, Zod, ESLint)
+
+## Schema Synchronization (Critical!)
+
+**Three schema systems must stay in sync:**
+
+1. **TypeScript Types** (`src/types/profile.ts`)
+   - IDE support, compile-time type checking
+   - Used by all TypeScript code
+
+2. **JSON Schema** (`profile-schema.json`)
+   - Profile file validation
+   - IDE auto-complete in JSON editors
+   - Used by `npm run validate`
+
+3. **Zod Schemas** (`src/profile-loader.ts`)
+   - **Runtime validation and parsing**
+   - **⚠️ CRITICAL: Missing fields are silently dropped!**
+   - Used during profile loading
+
+**Why Zod can break your features:**
+- Zod runs in **strict mode** by default
+- Unknown properties are **silently removed** during `parse()`
+- Even if TypeScript and JSON Schema are correct, missing Zod field = feature doesn't work
+
+**Debugging checklist:**
+1. Profile field works in tests but not runtime? → Check Zod schema
+2. TypeScript happy but feature broken? → Check Zod schema  
+3. JSON validates but field is undefined? → Check Zod schema
 

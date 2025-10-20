@@ -12,6 +12,7 @@ export interface SessionData {
   createdAt: number;
   lastActivityAt: number;
   sseStreams: Map<string, SSEStreamState>;
+  authToken?: string;
 }
 
 export interface SSEStreamState {

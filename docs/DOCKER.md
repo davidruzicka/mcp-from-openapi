@@ -10,21 +10,37 @@ Run MCP from OpenAPI server in an isolated Docker container.
 docker build -t mcp-from-openapi:latest .
 ```
 
-### 2. Configure Environment
+### 2. Choose Authentication Mode
 
+**Single-user mode** (simple, one token for all):
 ```bash
 cp .env.docker.example .env.docker
-# Edit .env.docker with your API token and settings
+# Edit .env.docker with API_TOKEN
+```
+
+**Multi-user mode** (each user sends own token):
+```bash
+# No .env.docker needed - tokens sent in HTTP headers
 ```
 
 ### 3. Run Container
 
 **Option A: Using docker-compose (recommended)**
+
+Single-user mode:
 ```bash
 docker-compose --env-file .env.docker up -d
 ```
 
+Multi-user mode:
+```bash
+# Edit docker-compose.yml to remove API_TOKEN
+docker-compose up -d
+```
+
 **Option B: Using docker run**
+
+Single-user mode:
 ```bash
 docker run -d \
   --name mcp-server \
@@ -32,9 +48,24 @@ docker run -d \
   -v $(pwd)/profiles:/app/profiles:ro \
   -e OPENAPI_SPEC_PATH=/app/profiles/gitlab/openapi.yaml \
   -e MCP_PROFILE_PATH=/app/profiles/gitlab/developer-profile.json \
-  -e API_TOKEN=your_token_here \
+  -e API_TOKEN=your_token \
   -e API_BASE_URL=https://gitlab.com/api/v4 \
   mcp-from-openapi:latest
+```
+
+Multi-user mode:
+```bash
+docker run -d \
+  --name mcp-server \
+  -p 3003:3003 \
+  -v $(pwd)/profiles:/app/profiles:ro \
+  -e OPENAPI_SPEC_PATH=/app/profiles/gitlab/openapi.yaml \
+  -e MCP_PROFILE_PATH=/app/profiles/gitlab/developer-profile.json \
+  -e API_BASE_URL=https://gitlab.com/api/v4 \
+  -e MCP_TRANSPORT=http \
+  -e MCP_HOST=0.0.0.0 \
+  mcp-from-openapi:latest
+# Clients send: Authorization: Bearer <user_token>
 ```
 
 ### 4. Verify
@@ -68,8 +99,10 @@ All standard environment variables are supported:
 # Required
 OPENAPI_SPEC_PATH: /app/profiles/gitlab/openapi.yaml
 MCP_PROFILE_PATH: /app/profiles/gitlab/developer-profile.json
-API_TOKEN: your_api_token
 API_BASE_URL: https://api.example.com
+
+# Optional (can be sent in HTTP headers instead)
+API_TOKEN: your_api_token
 
 # Transport
 MCP_TRANSPORT: http
@@ -403,4 +436,5 @@ build:
 - [Dockerfile best practices](https://docs.docker.com/develop/develop-images/dockerfile_best-practices/)
 - [Docker Compose documentation](https://docs.docker.com/compose/)
 - [Multi-stage builds](https://docs.docker.com/build/building/multi-stage/)
+
 

@@ -9,10 +9,205 @@
     "branch": ["branch"],
     "user_id": ["user_id"],
     "job_id": ["job_id"],
-    "merge_request_iid": ["iid"]
+    "merge_request_iid": ["iid", "mr_iid"],
+    "issue_iid": ["iid"]
   },
   
   "tools": [
+    {
+      "name": "manage_groups",
+      "description": "Work with GitLab groups. Actions: 'list' (all groups), 'get' (group details), 'list_projects' (projects in group), 'list_subgroups' (subgroups of group). Use 'list' to discover groups, 'list_projects' to see projects in a specific group.",
+      "metadata_params": ["action", "group_id"],
+      "operations": {
+        "list": "getApiV4Groups",
+        "get": "getApiV4GroupsId",
+        "list_projects": "getApiV4GroupsIdProjects",
+        "list_subgroups": "getApiV4GroupsIdSubgroups"
+      },
+      "response_fields": {
+        "list": ["id", "name", "path", "full_path", "description", "visibility", "web_url"],
+        "list_projects": ["id", "name", "path", "path_with_namespace", "description", "visibility", "web_url", "last_activity_at", "star_count", "forks_count", "avatar_url"],
+        "list_subgroups": ["id", "name", "path", "full_path", "description", "visibility", "web_url"]
+      },
+      "parameters": {
+        "action": {
+          "type": "string",
+          "enum": ["list", "get", "list_projects", "list_subgroups"],
+          "description": "Operation to perform",
+          "required": true
+        },
+        "group_id": {
+          "type": "string",
+          "description": "Group ID or URL-encoded path (e.g. 'AI-Adoption')",
+          "required_for": ["get", "list_projects", "list_subgroups"]
+        },
+        "page": {
+          "type": "integer",
+          "description": "Page number for pagination",
+          "default": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "description": "Items per page (max 100)",
+          "default": 20
+        },
+        "search": {
+          "type": "string",
+          "description": "Search for groups/projects by name"
+        },
+        "owned": {
+          "type": "boolean",
+          "description": "Limit to groups owned by current user (for list action)"
+        },
+        "archived": {
+          "type": "boolean",
+          "description": "Limit by archived status (for list_projects action)"
+        }
+      }
+    },
+
+    {
+      "name": "manage_projects",
+      "description": "Work with GitLab projects. Actions: 'list' (all projects), 'get' (project details), 'search' (search projects). Use 'list' to discover projects, 'search' to find specific ones.",
+      "metadata_params": ["action", "project_id"],
+      "operations": {
+        "list": "getApiV4Projects",
+        "get": "getApiV4ProjectsId"
+      },
+      "response_fields": {
+        "list": ["id", "name", "path", "path_with_namespace", "description", "visibility", "web_url", "last_activity_at", "star_count", "forks_count", "avatar_url", "namespace"]
+      },
+      "parameters": {
+        "action": {
+          "type": "string",
+          "enum": ["list", "get"],
+          "description": "Operation to perform",
+          "required": true
+        },
+        "project_id": {
+          "type": "string",
+          "description": "Project ID or URL-encoded path (e.g. 'my-org/my-project')",
+          "required_for": ["get"]
+        },
+        "page": {
+          "type": "integer",
+          "description": "Page number for pagination",
+          "default": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "description": "Items per page (max 100)",
+          "default": 20
+        },
+        "search": {
+          "type": "string",
+          "description": "Search for projects by name or description"
+        },
+        "owned": {
+          "type": "boolean",
+          "description": "Limit to projects owned by current user"
+        },
+        "membership": {
+          "type": "boolean",
+          "description": "Limit to projects current user is a member of"
+        }
+      }
+    },
+
+    {
+      "name": "manage_merge_requests",
+      "description": "Work with merge requests. Actions: 'list' (all MRs in project), 'get' (single MR details). Use 'list' to see all merge requests, filter by state (opened, closed, merged, all).",
+      "metadata_params": ["action", "project_id", "merge_request_iid"],
+      "operations": {
+        "list": "getApiV4ProjectsIdMergeRequests",
+        "get": "getApiV4ProjectsIdMergeRequestsMergeRequestIid"
+      },
+      "response_fields": {
+        "list": ["id", "iid", "title", "description", "state", "web_url", "author", "created_at", "updated_at"]
+      },
+      "parameters": {
+        "action": {
+          "type": "string",
+          "enum": ["list", "get"],
+          "description": "Operation to perform",
+          "required": true
+        },
+        "project_id": {
+          "type": "string",
+          "description": "Project ID or URL-encoded path",
+          "required": true
+        },
+        "merge_request_iid": {
+          "type": "integer",
+          "description": "The internal ID of the merge request",
+          "required_for": ["get"]
+        },
+        "state": {
+          "type": "string",
+          "enum": ["opened", "closed", "merged", "all"],
+          "description": "Filter by merge request state",
+          "default": "opened"
+        },
+        "page": {
+          "type": "integer",
+          "description": "Page number for pagination",
+          "default": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "description": "Items per page (max 100)",
+          "default": 20
+        }
+      }
+    },
+
+    {
+      "name": "manage_issues",
+      "description": "Work with issues. Actions: 'list' (all issues in project), 'get' (single issue details). Use 'list' to see all issues, filter by state (opened, closed, all).",
+      "metadata_params": ["action", "project_id", "issue_iid"],
+      "operations": {
+        "list": "getApiV4ProjectsIdIssues",
+        "get": "getApiV4ProjectsIdIssuesIssueIid"
+      },
+      "response_fields": {
+        "list": ["id", "iid", "title", "description", "state", "web_url", "author", "created_at", "updated_at"]
+      },
+      "parameters": {
+        "action": {
+          "type": "string",
+          "enum": ["list", "get"],
+          "description": "Operation to perform",
+          "required": true
+        },
+        "project_id": {
+          "type": "string",
+          "description": "Project ID or URL-encoded path",
+          "required": true
+        },
+        "issue_iid": {
+          "type": "integer",
+          "description": "The internal ID of the issue",
+          "required_for": ["get"]
+        },
+        "state": {
+          "type": "string",
+          "enum": ["opened", "closed", "all"],
+          "description": "Filter by issue state",
+          "default": "opened"
+        },
+        "page": {
+          "type": "integer",
+          "description": "Page number for pagination",
+          "default": 1
+        },
+        "per_page": {
+          "type": "integer",
+          "description": "Items per page (max 100)",
+          "default": 20
+        }
+      }
+    },
+
     {
       "name": "manage_project_badges",
       "description": "Manage badges for a project. Actions: 'list' (get all badges), 'get' (single badge by ID), 'create' (new badge with link_url and image_url), 'update' (modify existing badge), 'delete' (remove badge). Use 'list' when you want to see what badges exist, 'create' to add new ones.",

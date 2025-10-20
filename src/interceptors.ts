@@ -29,7 +29,7 @@ export type InterceptorFn = (
 export class InterceptorChain {
   private interceptors: InterceptorFn[] = [];
 
-  constructor(public config: InterceptorConfig) {
+  constructor(public config: InterceptorConfig, private authToken?: string) {
     this.buildChain();
   }
 
@@ -48,11 +48,11 @@ export class InterceptorChain {
   }
 
   /**
-   * Auth interceptor: adds auth header/query from env
-   * 
+   * Auth interceptor: adds auth header/query from env or session token
+   *
    * Why env-based: Keeps secrets out of config files. Config defines WHERE
    * to get the token, runtime provides the value.
-   * 
+   *
    * Supports:
    * - bearer: Standard HTTP Authorization: Bearer <token>
    * - query: API key in URL (?api_key=<token>)
@@ -60,11 +60,11 @@ export class InterceptorChain {
    */
   private createAuthInterceptor(): InterceptorFn {
     const authConfig = this.config.auth!;
-    const token = process.env[authConfig.value_from_env];
+    const token = this.authToken || process.env[authConfig.value_from_env];
 
     if (!token) {
       throw new Error(
-        `Auth token not found in environment variable: ${authConfig.value_from_env}`
+        `Auth token not found. Expected in environment variable: ${authConfig.value_from_env} or passed to constructor`
       );
     }
 
@@ -266,7 +266,11 @@ export class HttpClient {
 
       // Why throw on non-2xx: Allows caller to handle errors with try/catch
       if (response.status < HTTP_STATUS.OK || response.status >= HTTP_STATUS.MULTIPLE_CHOICES) {
-        throw new Error(`HTTP ${response.status}: ${JSON.stringify(body)}`);
+        // Don't leak response body in error message (may contain sensitive data)
+        const bodyPreview = typeof body === 'string' 
+          ? body.substring(0, 100)
+          : JSON.stringify(body).substring(0, 100);
+        throw new Error(`HTTP ${response.status}: ${bodyPreview}${bodyPreview.length >= 100 ? '...' : ''}`);
       }
 
       return responseContext;

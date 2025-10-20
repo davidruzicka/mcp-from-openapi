@@ -4,6 +4,8 @@ For a complete working example with GitLab API, see [EXAMPLE-GITLAB.md](./EXAMPL
 
 ## Quick Start
 
+### stdio Transport (Single-user, Local)
+
 1. **Setup environment:**
 
 ```bash
@@ -20,6 +22,38 @@ export API_BASE_URL=https://api.example.com
 npm install
 npm run build
 npm start
+```
+
+### HTTP Transport (Multi-user, Remote)
+
+1. **Setup environment (no API_TOKEN):**
+
+```bash
+export OPENAPI_SPEC_PATH=./path/to/openapi.yaml
+export MCP_PROFILE_PATH=./profiles/your-profile.json
+export MCP_TRANSPORT=http
+export MCP_HOST=0.0.0.0
+export MCP_PORT=3003
+export API_BASE_URL=https://api.example.com
+# No API_TOKEN - clients send tokens in headers
+```
+
+2. **Build and run:**
+
+```bash
+npm install
+npm run build
+npm start
+```
+
+3. **Client sends token during initialization:**
+
+```bash
+curl -X POST http://localhost:3003/mcp \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -H "Authorization: Bearer your_user_token" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{...}}'
 ```
 
 ## Example Tool Calls

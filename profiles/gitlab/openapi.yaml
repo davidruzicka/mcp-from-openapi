@@ -2846,6 +2846,347 @@ paths:
       responses:
         '200':
           description: Job started successfully
+  /groups:
+    get:
+      tags:
+        - groups
+      summary: List groups
+      description: Get a list of visible groups for authenticated user
+      operationId: getApiV4Groups
+      parameters:
+        - name: page
+          in: query
+          description: Page number
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 20
+        - name: search
+          in: query
+          description: Search for groups by name or path
+          schema:
+            type: string
+        - name: owned
+          in: query
+          description: Limit to groups owned by the current user
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/API_Entities_BasicGroupDetails'
+  /groups/{id}:
+    get:
+      tags:
+        - groups
+      summary: Get group details
+      description: Get details of a single group
+      operationId: getApiV4GroupsId
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The ID or URL-encoded path of the group
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/API_Entities_BasicGroupDetails'
+  /groups/{id}/projects:
+    get:
+      tags:
+        - groups
+      summary: List group projects
+      description: Get a list of projects in a group
+      operationId: getApiV4GroupsIdProjects
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The ID or URL-encoded path of the group
+          schema:
+            type: string
+        - name: page
+          in: query
+          description: Page number
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 20
+        - name: search
+          in: query
+          description: Search for projects by name
+          schema:
+            type: string
+        - name: archived
+          in: query
+          description: Limit by archived status
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/API_Entities_BasicProjectDetails'
+  /groups/{id}/subgroups:
+    get:
+      tags:
+        - groups
+      summary: List subgroups
+      description: Get a list of subgroups of a group
+      operationId: getApiV4GroupsIdSubgroups
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The ID or URL-encoded path of the group
+          schema:
+            type: string
+        - name: page
+          in: query
+          description: Page number
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/API_Entities_BasicGroupDetails'
+  /projects:
+    get:
+      tags:
+        - projects
+      summary: List projects
+      description: Get a list of all visible projects
+      operationId: getApiV4Projects
+      parameters:
+        - name: page
+          in: query
+          description: Page number
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 20
+        - name: search
+          in: query
+          description: Search for projects by name or description
+          schema:
+            type: string
+        - name: owned
+          in: query
+          description: Limit to projects owned by the current user
+          schema:
+            type: boolean
+        - name: membership
+          in: query
+          description: Limit to projects that the current user is a member of
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/API_Entities_BasicProjectDetails'
+  /projects/{id}:
+    get:
+      tags:
+        - projects
+      summary: Get project details
+      description: Get details of a single project
+      operationId: getApiV4ProjectsId
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The ID or URL-encoded path of the project
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/API_Entities_BasicProjectDetails'
+  /projects/{id}/merge_requests:
+    get:
+      tags:
+        - merge_requests
+      summary: List merge requests
+      description: Get all merge requests for a project
+      operationId: getApiV4ProjectsIdMergeRequests
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The ID or URL-encoded path of the project
+          schema:
+            type: string
+        - name: state
+          in: query
+          description: Return merge requests with the specified state
+          schema:
+            type: string
+            enum: [opened, closed, merged, all]
+        - name: page
+          in: query
+          description: Page number
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/API_Entities_MergeRequestBasic'
+  /projects/{id}/merge_requests/{merge_request_iid}:
+    get:
+      tags:
+        - merge_requests
+      summary: Get merge request details
+      description: Get details of a single merge request
+      operationId: getApiV4ProjectsIdMergeRequestsMergeRequestIid
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The ID or URL-encoded path of the project
+          schema:
+            type: string
+        - name: merge_request_iid
+          in: path
+          required: true
+          description: The internal ID of the merge request
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/API_Entities_MergeRequestBasic'
+  /projects/{id}/issues:
+    get:
+      tags:
+        - issues
+      summary: List issues
+      description: Get all issues for a project
+      operationId: getApiV4ProjectsIdIssues
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The ID or URL-encoded path of the project
+          schema:
+            type: string
+        - name: state
+          in: query
+          description: Return issues with the specified state
+          schema:
+            type: string
+            enum: [opened, closed, all]
+        - name: page
+          in: query
+          description: Page number
+          schema:
+            type: integer
+            default: 1
+        - name: per_page
+          in: query
+          description: Number of items per page
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/API_Entities_IssueBasic'
+  /projects/{id}/issues/{issue_iid}:
+    get:
+      tags:
+        - issues
+      summary: Get issue details
+      description: Get details of a single issue
+      operationId: getApiV4ProjectsIdIssuesIssueIid
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The ID or URL-encoded path of the project
+          schema:
+            type: string
+        - name: issue_iid
+          in: path
+          required: true
+          description: The internal ID of the issue
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/API_Entities_IssueBasic'
 components:
   parameters:
     ProjectIdOrPath:
@@ -3628,6 +3969,93 @@ components:
           $ref: '#/components/schemas/API_Entities_UserBasic'
           description: The user that started the job
       description: API_Entities_Job model
+    API_Entities_BasicGroupDetails:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        path:
+          type: string
+        description:
+          type: string
+        visibility:
+          type: string
+        full_name:
+          type: string
+        full_path:
+          type: string
+        web_url:
+          type: string
+      description: Basic group information
+    API_Entities_BasicProjectDetails:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        path:
+          type: string
+        description:
+          type: string
+        visibility:
+          type: string
+        name_with_namespace:
+          type: string
+        path_with_namespace:
+          type: string
+        web_url:
+          type: string
+        namespace:
+          type: object
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            path:
+              type: string
+            full_path:
+              type: string
+      description: Basic project information
+    API_Entities_MergeRequestBasic:
+      type: object
+      properties:
+        id:
+          type: integer
+        iid:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        state:
+          type: string
+        web_url:
+          type: string
+        author:
+          $ref: '#/components/schemas/API_Entities_UserBasic'
+      description: Basic merge request information
+    API_Entities_IssueBasic:
+      type: object
+      properties:
+        id:
+          type: integer
+        iid:
+          type: integer
+        title:
+          type: string
+        description:
+          type: string
+        state:
+          type: string
+        web_url:
+          type: string
+        author:
+          $ref: '#/components/schemas/API_Entities_UserBasic'
+      description: Basic issue information
   securitySchemes:
     ApiKeyAuth:
       type: apiKey

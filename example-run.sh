@@ -4,13 +4,14 @@
 # See EXAMPLE-GITLAB.md for GitLab-specific configuration
 
 # Set required environment variables
-export OPENAPI_SPEC_PATH="./openapi.yaml"
-export MCP_PROFILE_PATH="./profiles/api-profile.json"
-export MCP_TRANSPORT="stdio"
+export OPENAPI_SPEC_PATH="./profiles/gitlab/openapi.yaml"
+export MCP_PROFILE_PATH="./profiles/gitlab/developer-profile.json"
+export MCP_TRANSPORT="http"
+#export MCP_TRANSPORT="stdio"
 
 # API configuration (replace with your values)
-export API_TOKEN="your_api_token_here"
-export API_BASE_URL="https://api.example.com"
+#export API_TOKEN="your_api_token_here"
+export API_BASE_URL="https://gitlab.seznam.net"
 
 # Optional: Enable debug logging
 # export DEBUG=true

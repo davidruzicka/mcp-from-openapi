@@ -2,7 +2,7 @@
 # Why: Smaller final image, faster builds with layer caching
 
 # Stage 1: Build
-FROM node:20-alpine AS builder
+FROM docker.ops.iszn.cz/szn-image/node-ci:24-szn1 AS builder
 
 WORKDIR /app
 
@@ -21,7 +21,7 @@ COPY src/ ./src/
 RUN npx tsc --outDir dist --rootDir src
 
 # Stage 2: Production
-FROM node:20-alpine
+FROM docker.ops.iszn.cz/szn-image/node-ci:24-szn1
 
 WORKDIR /app
 

@@ -82,6 +82,22 @@
             }
           ]
         },
+        "response_fields": {
+          "type": "object",
+          "description": "Define which fields to include in response for each action (reduces verbosity)",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "examples": [
+            {
+              "list": ["id", "name", "path", "web_url"],
+              "get": ["id", "name", "description", "web_url", "created_at"]
+            }
+          ]
+        },
         "steps": {
           "type": "array",
           "description": "Sequence of API calls to execute (for composite tools)",
