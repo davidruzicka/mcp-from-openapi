@@ -4,7 +4,7 @@
  * Why: Validates auth types (bearer, query, custom-header), rate limiting, and retry logic
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { HttpClient, InterceptorChain } from './interceptors.js';
 import type { InterceptorConfig } from './types/profile.js';
 
@@ -141,6 +141,14 @@ describe('HttpClient - Auth Interceptors', () => {
 });
 
 describe('HttpClient - Rate Limiting', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('should create rate limit interceptor when configured', () => {
     const config: InterceptorConfig = {
       rate_limit: {
@@ -149,10 +157,242 @@ describe('HttpClient - Rate Limiting', () => {
     };
 
     const interceptors = new InterceptorChain(config);
-    
+
     // Just verify it initializes without error
     expect(interceptors).toBeDefined();
     expect(interceptors.config.rate_limit).toEqual({ max_requests_per_minute: 60 });
+  });
+
+  it('should support per-endpoint rate limiting overrides', () => {
+    const config: InterceptorConfig = {
+      rate_limit: {
+        max_requests_per_minute: 100,
+        overrides: {
+          'searchOperation': { max_requests_per_minute: 10 },
+          'createOperation': { max_requests_per_minute: 5 },
+        },
+      },
+    };
+
+    const interceptors = new InterceptorChain(config);
+
+    expect(interceptors.config.rate_limit!.max_requests_per_minute).toBe(100);
+    expect(interceptors.config.rate_limit!.overrides!['searchOperation']).toEqual({ max_requests_per_minute: 10 });
+    expect(interceptors.config.rate_limit!.overrides!['createOperation']).toEqual({ max_requests_per_minute: 5 });
+  });
+
+  it('should enforce global rate limit for unknown operationId', async () => {
+    const config: InterceptorConfig = {
+      rate_limit: {
+        max_requests_per_minute: 2, // 2 req/min
+      },
+    };
+
+    const interceptors = new InterceptorChain(config);
+
+    // První 2 requesty by měly projít okamžitě
+    await interceptors.execute(
+      { method: 'GET', url: 'http://example.com', operationId: 'unknownOp' },
+      async () => ({ status: 200, headers: {}, body: 'ok' })
+    );
+    await interceptors.execute(
+      { method: 'GET', url: 'http://example.com', operationId: 'unknownOp' },
+      async () => ({ status: 200, headers: {}, body: 'ok' })
+    );
+
+    // Třetí request by měl čekat (2 req/min = 30s na token)
+    const thirdRequest = interceptors.execute(
+      { method: 'GET', url: 'http://example.com', operationId: 'unknownOp' },
+      async () => ({ status: 200, headers: {}, body: 'ok' })
+    );
+
+    // Ověř, že se vytvořil timer (čekání)
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+
+    // Posuň čas o 30 sekund
+    vi.advanceTimersByTime(30000);
+
+    // Teď by request měl projít
+    await expect(thirdRequest).resolves.toEqual({
+      status: 200,
+      headers: {},
+      body: 'ok'
+    });
+  });
+
+  it('should enforce per-endpoint rate limits', async () => {
+    const config: InterceptorConfig = {
+      rate_limit: {
+        max_requests_per_minute: 60, // High global limit
+        overrides: {
+          'searchOp': { max_requests_per_minute: 2 }, // 2 req/min for search
+          'createOp': { max_requests_per_minute: 1 }, // 1 req/min for create
+        },
+      },
+    };
+
+    const interceptors = new InterceptorChain(config);
+
+    // Test search operation (2 req/min)
+    // První 2 requesty projdou okamžitě
+    await interceptors.execute(
+      { method: 'GET', url: 'http://example.com', operationId: 'searchOp' },
+      async () => ({ status: 200, headers: {}, body: 'ok' })
+    );
+    await interceptors.execute(
+      { method: 'GET', url: 'http://example.com', operationId: 'searchOp' },
+      async () => ({ status: 200, headers: {}, body: 'ok' })
+    );
+
+    // Třetí request by měl čekat
+    const searchRequest = interceptors.execute(
+      { method: 'GET', url: 'http://example.com', operationId: 'searchOp' },
+      async () => ({ status: 200, headers: {}, body: 'ok' })
+    );
+
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    vi.advanceTimersByTime(30000); // 30s
+    await expect(searchRequest).resolves.toEqual({
+      status: 200,
+      headers: {},
+      body: 'ok'
+    });
+
+    // Test create operation (1 req/min)
+    // První request projde okamžitě
+    await interceptors.execute(
+      { method: 'GET', url: 'http://example.com', operationId: 'createOp' },
+      async () => ({ status: 200, headers: {}, body: 'ok' })
+    );
+
+    // Druhý request by měl čekat 60s
+    const createRequest = interceptors.execute(
+      { method: 'GET', url: 'http://example.com', operationId: 'createOp' },
+      async () => ({ status: 200, headers: {}, body: 'ok' })
+    );
+
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    vi.advanceTimersByTime(60000); // 60s
+    await expect(createRequest).resolves.toEqual({
+      status: 200,
+      headers: {},
+      body: 'ok'
+    });
+  });
+
+  it('should use global limit when operationId has no override', async () => {
+    const config: InterceptorConfig = {
+      rate_limit: {
+        max_requests_per_minute: 4, // 4 req/min global limit
+        overrides: {
+          'specialOp': { max_requests_per_minute: 2 }, // 2 req/min for special op
+        },
+      },
+    };
+
+    const interceptors = new InterceptorChain(config);
+
+    // Test global limit (4 req/min) - první 4 projdou okamžitě
+    for (let i = 0; i < 4; i++) {
+      await interceptors.execute(
+        { method: 'GET', url: 'http://example.com', operationId: 'normalOp' },
+        async () => ({ status: 200, headers: {}, body: 'ok' })
+      );
+    }
+
+    // Pátý request by měl čekat (4 req/min = 15s na token)
+    const fifthRequest = interceptors.execute(
+      { method: 'GET', url: 'http://example.com', operationId: 'normalOp' },
+      async () => ({ status: 200, headers: {}, body: 'ok' })
+    );
+
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    vi.advanceTimersByTime(15000); // 15s
+    await expect(fifthRequest).resolves.toEqual({
+      status: 200,
+      headers: {},
+      body: 'ok'
+    });
+  });
+
+  it('should maintain separate token buckets for different endpoints', async () => {
+    const config: InterceptorConfig = {
+      rate_limit: {
+        max_requests_per_minute: 60, // High global limit
+        overrides: {
+          'fastOp': { max_requests_per_minute: 60 }, // Same as global
+          'slowOp': { max_requests_per_minute: 1 }, // 1 req/min
+        },
+      },
+    };
+
+    const interceptors = new InterceptorChain(config);
+
+    // Fast operation should complete quickly (just 1 request, no rate limiting)
+    const fastRequest = interceptors.execute(
+      { method: 'GET', url: 'http://example.com', operationId: 'fastOp' },
+      async () => ({ status: 200, headers: {}, body: 'ok' })
+    );
+
+    expect(vi.getTimerCount()).toBe(0); // No timers should be created
+    await expect(fastRequest).resolves.toEqual({
+      status: 200,
+      headers: {},
+      body: 'ok'
+    });
+
+    // Slow operation should be rate limited
+    // První request projde okamžitě
+    await interceptors.execute(
+      { method: 'GET', url: 'http://example.com', operationId: 'slowOp' },
+      async () => ({ status: 200, headers: {}, body: 'ok' })
+    );
+
+    // Druhý request by měl čekat 60s
+    const slowRequest = interceptors.execute(
+      { method: 'GET', url: 'http://example.com', operationId: 'slowOp' },
+      async () => ({ status: 200, headers: {}, body: 'ok' })
+    );
+
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    vi.advanceTimersByTime(60000); // 60s
+    await expect(slowRequest).resolves.toEqual({
+      status: 200,
+      headers: {},
+      body: 'ok'
+    });
+  });
+
+  it('should work without overrides (backward compatibility)', async () => {
+    const config: InterceptorConfig = {
+      rate_limit: {
+        max_requests_per_minute: 3, // 3 req/min
+      },
+    };
+
+    const interceptors = new InterceptorChain(config);
+
+    // První 3 requesty projdou okamžitě
+    for (let i = 0; i < 3; i++) {
+      await interceptors.execute(
+        { method: 'GET', url: 'http://example.com', operationId: 'anyOp' },
+        async () => ({ status: 200, headers: {}, body: 'ok' })
+      );
+    }
+
+    // Čtvrtý request by měl čekat (3 req/min = 20s na token)
+    const fourthRequest = interceptors.execute(
+      { method: 'GET', url: 'http://example.com', operationId: 'anyOp' },
+      async () => ({ status: 200, headers: {}, body: 'ok' })
+    );
+
+    expect(vi.getTimerCount()).toBeGreaterThan(0);
+    vi.advanceTimersByTime(20000); // 20s
+    await expect(fourthRequest).resolves.toEqual({
+      status: 200,
+      headers: {},
+      body: 'ok'
+    });
   });
 });
 

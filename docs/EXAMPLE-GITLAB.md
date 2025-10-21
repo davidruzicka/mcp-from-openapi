@@ -5,7 +5,7 @@ Complete working example using MCP server with GitLab API.
 ## Results
 
 For GitLab API specifically:
-- Reduced from 200+ potential tools to 5 aggregated tools
+- Reduced from 200+ potential tools to 9 aggregated tools
 - 85% reduction in MCP tool count
 - Tested with real GitLab OpenAPI specification
 

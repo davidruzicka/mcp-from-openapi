@@ -49,6 +49,7 @@ export interface ParameterDefinition {
 export interface CompositeStep {
   call: string; // e.g., "GET /projects/{id}/merge_requests/{iid}"
   store_as: string; // JSONPath-like: "merge_request", "merge_request.comments"
+  depends_on?: string[]; // Optional dependencies on other steps' store_as values
 }
 
 export interface InterceptorConfig {
@@ -80,6 +81,7 @@ export interface BaseUrlConfig {
 
 export interface RateLimitConfig {
   max_requests_per_minute: number;
+  overrides?: Record<string, { max_requests_per_minute: number }>;
 }
 
 export interface RetryConfig {

@@ -319,7 +319,7 @@ Result structure:
 
 Ensure `API_TOKEN` is set:
 ```bash
-export API_TOKEN=glpat-xxxxxxxxxxxxxxxxxxxx
+export API_TOKEN=xxxxxxxxxxxxxxxxxxxx
 ```
 
 ### Rate Limiting
@@ -369,6 +369,10 @@ Add to `claude_desktop_config.json`:
 ### Cursor IDE
 
 Similar configuration in MCP settings.
+
+### Containerized Deployment
+
+See [docs/DOCKER.md](./docs/DOCKER.md) for containerized deployment.
 
 ## Performance Tips
 

@@ -18,10 +18,10 @@
          │            - Fast operation lookup
          │
          ├──────────► Profile Loader (profile-loader.ts)
-         │            - Validates profile JSON with Zod
+         │            - Validates profile JSON with Zod (auto-generated)
          │            - Checks semantic rules
          │            - Default profile generation
-         │            ⚠️  Zod schemas MUST be kept in sync with TypeScript types!
+         │            ✅ Zod schemas auto-generated from TypeScript types
          │
          ├──────────► Tool Generator (tool-generator.ts)
          │            - Generates MCP tools from profile
@@ -340,20 +340,6 @@ docs/
 
 See [TODO.md](./TODO.md) for detailed implementation plans.
 
-**P1 - Performance**:
-1. **Parallel Composite Steps**: DAG-based execution for independent steps
-2. **Schema $ref Resolution**: Fully resolve nested schema references
-3. **Per-Endpoint Rate Limiting**: Different limits for different operations
-
-**P2 - Maintenance**:
-4. **Validate Operations Keys**: Catch typos in profile at load time
-5. **Structured Error Types**: Machine-readable error codes
-
-**P3 - Nice-to-Have**:
-6. **Response Caching**: Optional caching layer for idempotent requests
-7. **Request Deduplication**: Prevent thundering herd
-8. **Auto-generate Profile**: CLI tool to generate profiles from OpenAPI spec
-
 **Future Ideas**:
 - Auto-pagination (follow `Link` headers)
 - Breaking change detection (compare OpenAPI versions)
@@ -401,9 +387,9 @@ See [TODO.md](./TODO.md) for detailed implementation plans.
    - IDE auto-complete in JSON editors
    - Used by `npm run validate`
 
-3. **Zod Schemas** (`src/profile-loader.ts`)
-   - **Runtime validation and parsing**
-   - **⚠️ CRITICAL: Missing fields are silently dropped!**
+3. **Zod Schemas** (`src/generated-schemas.ts`)
+   - **Auto-generated runtime validation and parsing**
+   - **✅ Generated from TypeScript types via `npm run generate-schemas`**
    - Used during profile loading
 
 **Why Zod can break your features:**
@@ -412,7 +398,7 @@ See [TODO.md](./TODO.md) for detailed implementation plans.
 - Even if TypeScript and JSON Schema are correct, missing Zod field = feature doesn't work
 
 **Debugging checklist:**
-1. Profile field works in tests but not runtime? → Check Zod schema
-2. TypeScript happy but feature broken? → Check Zod schema  
-3. JSON validates but field is undefined? → Check Zod schema
+1. Profile field works in tests but not runtime? → Run `npm run generate-schemas`
+2. TypeScript happy but feature broken? → Run `npm run generate-schemas`
+3. JSON validates but field is undefined? → Run `npm run generate-schemas`
 

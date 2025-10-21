@@ -390,6 +390,62 @@ describe('HttpTransport', () => {
     });
   });
 
+  describe('Legacy /sse alias (deprecated)', () => {
+    it('should support SSE response for initialization via POST /sse', async () => {
+      transport.setMessageHandler(async (msg) => ({
+        protocolVersion: '2025-03-26',
+        serverInfo: { name: 'test' },
+      }));
+
+      const response = await request(app)
+        .post('/sse')
+        .set('Accept', 'text/event-stream')
+        .send({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+          params: {},
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.headers['content-type']).toContain('text/event-stream');
+      expect(response.headers['mcp-session-id']).toBeDefined();
+      expect(response.text).toContain('id:');
+      expect(response.text).toContain('data:');
+    });
+
+    it('should require Mcp-Session-Id header for GET /sse', async () => {
+      const response = await request(app)
+        .get('/sse')
+        .set('Accept', 'text/event-stream');
+
+      expect(response.status).toBe(400);
+      expect(response.body).toHaveProperty('message');
+      expect(response.body.message).toContain('Mcp-Session-Id');
+    });
+
+    it('should delete session via DELETE /sse', async () => {
+      transport.setMessageHandler(async (msg) => ({ result: 'ok' }));
+
+      // Create session
+      const initResponse = await request(app)
+        .post('/mcp')
+        .set('Accept', 'application/json')
+        .send({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'initialize',
+        });
+      const sessionId = initResponse.headers['mcp-session-id'];
+
+      const deleteResponse = await request(app)
+        .delete('/sse')
+        .set('Mcp-Session-Id', sessionId);
+
+      expect(deleteResponse.status).toBe(204);
+    });
+  });
+
   describe('DELETE - Session Termination', () => {
     it('should delete existing session', async () => {
       transport.setMessageHandler(async (msg) => ({ result: 'ok' }));

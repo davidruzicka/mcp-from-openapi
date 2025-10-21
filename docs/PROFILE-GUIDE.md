@@ -410,7 +410,9 @@ Combine related operations into unified tools to reduce context pollution:
 
 ### 3. Composite Tools for Common Workflows
 
-Create composite tools for multi-step operations users frequently need (reduces LLM requests and latency):
+Create composite tools for multi-step operations users frequently need (reduces LLM requests and latency).
+
+#### Sequential Execution (Default)
 
 ```json
 {
@@ -423,6 +425,87 @@ Create composite tools for multi-step operations users frequently need (reduces 
   ]
 }
 ```
+
+All steps execute sequentially. Comments and approvals wait for MR to load first.
+
+#### Parallel Execution with Dependencies
+
+```json
+{
+  "name": "get_project_with_context",
+  "composite": true,
+  "steps": [
+    { "call": "getProject", "store_as": "project" },
+    {
+      "call": "getProjectMergeRequests",
+      "store_as": "merge_requests",
+      "depends_on": ["project"]
+    },
+    {
+      "call": "getProjectIssues",
+      "store_as": "issues",
+      "depends_on": ["project"]
+    },
+    {
+      "call": "getProjectMembers",
+      "store_as": "members",
+      "depends_on": ["project"]
+    }
+  ]
+}
+```
+
+- **Level 1**: `project` (no dependencies)
+- **Level 2**: `merge_requests`, `issues`, `members` (all depend on `project`) - **run in parallel**
+- **Performance**: ~3x faster than sequential execution
+
+#### Complex DAG Dependencies
+
+```json
+{
+  "name": "get_mr_with_full_context",
+  "composite": true,
+  "steps": [
+    { "call": "getMergeRequest", "store_as": "mr" },
+    {
+      "call": "getMRComments",
+      "store_as": "comments",
+      "depends_on": ["mr"]
+    },
+    {
+      "call": "getMRApprovals",
+      "store_as": "approvals",
+      "depends_on": ["mr"]
+    },
+    {
+      "call": "getCommentAuthors",
+      "store_as": "comment_authors",
+      "depends_on": ["comments"]
+    },
+    {
+      "call": "getApprovalUsers",
+      "store_as": "approval_users",
+      "depends_on": ["approvals"]
+    },
+    {
+      "call": "mergeContexts",
+      "store_as": "full_context",
+      "depends_on": ["comment_authors", "approval_users"]
+    }
+  ]
+}
+```
+
+**Execution order**:
+1. `mr` (independent)
+2. `comments`, `approvals` (parallel, depend on `mr`)
+3. `comment_authors`, `approval_users` (parallel, depend on their respective data)
+4. `full_context` (depends on both author lists)
+
+**Dependency Rules**:
+- `depends_on` must reference `store_as` values from other steps
+- No circular dependencies (detected at profile load time)
+- Independent steps automatically parallelized
 
 ### 4. Use Metadata Parameters
 
@@ -606,16 +689,20 @@ See working examples in `profiles/examples/`:
 
 ## Important: Schema Synchronization
 
-**⚠️ When adding new fields to `ToolDefinition` or `Profile` types:**
+**✅ Schemas are now auto-synchronized!**
+
+**When adding new fields to `ToolDefinition` or `Profile` types:**
 
 1. **Update TypeScript types** in `src/types/profile.ts`
-2. **Update JSON Schema** in `profile-schema.json` (for validation)
-3. **⚠️ CRITICAL: Update Zod schemas** in `src/profile-loader.ts`
+2. **Run `npm run build`** (auto-generates Zod schemas + compiles)
+3. **Optionally update JSON Schema** in `profile-schema.json` (for better IDE support)
 
-**Why all three?**
-- TypeScript types: IDE support, type safety
-- JSON Schema: Profile validation, IDE auto-complete
-- **Zod schemas: Runtime validation** - **if missing, the field will be silently removed during profile parsing!**
+**Note:** `npm run generate-schemas` runs automatically during build, so you don't need to remember it!
+
+**Why this approach?**
+- **TypeScript types**: Single source of truth, full type safety
+- **Zod schemas**: Auto-generated from TypeScript, runtime validation
+- **JSON Schema**: Manual maintenance for rich IDE autocomplete (examples, descriptions)
 
 **Example: Adding `response_fields`**
 
@@ -626,27 +713,28 @@ export interface ToolDefinition {
   response_fields?: Record<string, string[]>;
 }
 
-// 2. profile-schema.json
+// 2. Run: npm run build
+// → Auto-generates src/generated-schemas.ts with proper Zod validation
+
+// 3. Optional: Update profile-schema.json for better IDE experience
 {
   "properties": {
     "response_fields": {
       "type": "object",
+      "description": "Response field filtering per action",
       "additionalProperties": {
         "type": "array",
         "items": { "type": "string" }
-      }
+      },
+      "examples": [{
+        "list": ["id", "name", "path", "web_url"]
+      }]
     }
   }
 }
-
-// 3. src/profile-loader.ts (⚠️ CRITICAL!)
-const ToolDefSchema = z.object({
-  // ... existing fields ...
-  response_fields: z.record(z.array(z.string())).optional(),
-});
 ```
 
-**Debugging tip:** If a profile field is ignored at runtime, check if it's in the Zod schema!
+**Debugging tip:** If a profile field is ignored at runtime, run `npm run generate-schemas` to ensure Zod schemas are up-to-date!
 
 ## Next Steps
 

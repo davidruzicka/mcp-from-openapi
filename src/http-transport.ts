@@ -231,14 +231,36 @@ export class HttpTransport {
    * Why: Single endpoint for POST (client→server) and GET (SSE stream)
    */
   private setupRoutes(): void {
+    this.logger.info('Setting up HTTP routes');
+
     // Main MCP endpoint - POST for sending messages
     this.app.post('/mcp', this.handlePost.bind(this));
+    this.logger.info('Registered POST /mcp route');
 
     // Main MCP endpoint - GET for SSE streaming
     this.app.get('/mcp', this.handleGet.bind(this));
 
     // Session termination
     this.app.delete('/mcp', this.handleDelete.bind(this));
+
+    // Legacy alias endpoints - deprecated
+    // Why: Backward compatibility for clients using /sse
+    this.app.post('/sse', (req: Request, res: Response, next: NextFunction) => {
+      this.logger.warn('Deprecated endpoint used: POST /sse. Please migrate to POST /mcp');
+      this.logger.info('Handling POST /sse request');
+      return (this.handlePost as any)(req, res, next);
+    });
+    this.app.get('/sse', (req: Request, res: Response, next: NextFunction) => {
+      console.log('=== SSE GET handler called for path:', req.path);
+      this.logger.warn('Deprecated endpoint used: GET /sse. Please migrate to GET /mcp');
+      this.logger.info(`Handling GET /sse request from: ${req.ip}`);
+      return (this.handleGet as any)(req as any, res, next);
+    });
+    this.logger.info('Registered SSE routes: POST/GET/DELETE /sse');
+    this.app.delete('/sse', (req: Request, res: Response, next: NextFunction) => {
+      this.logger.warn('Deprecated endpoint used: DELETE /sse. Please migrate to DELETE /mcp');
+      return (this.handleDelete as any)(req as any, res, next);
+    });
 
     // Metrics endpoint (if enabled)
     if (this.config.metricsEnabled) {
@@ -249,11 +271,20 @@ export class HttpTransport {
     this.app.get('/health', (req: Request, res: Response) => {
       const startTime = Date.now();
       res.json({ status: 'ok', sessions: this.sessions.size });
-      
+
       if (this.metrics) {
         const duration = (Date.now() - startTime) / 1000;
         this.metrics.recordHttpRequest(req.method, req.path, res.statusCode, duration);
       }
+    });
+
+    // Debug: SSE route registered
+    this.logger.info('SSE routes registered successfully');
+
+    // Default 404 handler
+    this.app.use((req: Request, res: Response) => {
+      console.log('=== Default 404 handler called for:', req.method, req.path);
+      res.status(404).send('<!DOCTYPE html>\n<html>\n<head><title>Error</title></head>\n<body><pre>Cannot ${req.method} ${req.path}</pre></body>\n</html>');
     });
   }
   

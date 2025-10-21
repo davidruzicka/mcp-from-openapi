@@ -9,6 +9,7 @@ import type { CompositeStep } from './types/profile.js';
 import type { HttpClient } from './interceptors.js';
 import type { OperationInfo } from './types/openapi.js';
 import { OpenAPIParser } from './openapi-parser.js';
+import { DAGExecutor, type ExecutionLevel } from './dag-executor.js';
 
 export interface CompositeResult {
   data: Record<string, unknown>;
@@ -33,8 +34,8 @@ export class CompositeExecutor {
   /**
    * Execute a series of API calls and merge results
    *
-   * Why sequential: Steps may depend on previous results (e.g., get MR ID, then fetch comments).
-   * Could parallelize independent steps in future optimization.
+   * Why parallel: Steps may have dependencies, but independent steps can run concurrently.
+   * Uses DAG analysis to determine safe parallelization while maintaining correctness.
    *
    * Supports partial results: If allowPartial=true, continues after errors and returns
    * what was completed. Useful for composite actions where some data is better than none.
@@ -45,62 +46,57 @@ export class CompositeExecutor {
     allowPartial: boolean = false,
     httpClient?: HttpClient
   ): Promise<CompositeResult> {
+    // Analyze DAG and get execution levels
+    const executionLevels = DAGExecutor.topologicalSort(steps);
+
     const result: Record<string, unknown> = {};
     const errors: StepError[] = [];
     let completedSteps = 0;
 
-    for (let i = 0; i < steps.length; i++) {
-      const step = steps[i];
-      
-      try {
-        const { method, path, operation } = this.parseCall(step.call);
-        
-        if (!operation) {
-          throw new Error(`Operation not found for call: ${step.call}`);
-        }
+    // Execute level by level (each level can run in parallel)
+    for (const level of executionLevels) {
+      // Execute all steps in current level concurrently
+      const levelPromises = level.steps.map((step, levelIndex) =>
+        this.executeStep(step, level.stepIndices[levelIndex], args, httpClient)
+      );
 
-        // Substitute path parameters from args
-        const resolvedPath = this.resolvePath(path, args);
-        
-        // Execute request
-        const client = httpClient || this.httpClient;
-        if (!client) {
-          throw new Error('HTTP client not provided');
-        }
-        const response = await client.request(method, resolvedPath, {
-          params: this.extractQueryParams(operation, args),
-        });
+      // Wait for all steps in this level to complete
+      const levelResults = await Promise.allSettled(levelPromises);
 
-        // Store result at specified path
-        this.storeResult(result, step.store_as, response.body);
-        completedSteps++;
-        
-      } catch (error) {
-        const stepError: StepError = {
-          step_index: i,
-          step_call: step.call,
-          error: error instanceof Error ? error.message : String(error),
-          timestamp: new Date().toISOString(),
-        };
-        
-        errors.push(stepError);
-        
-        // Store error in result for debugging
-        this.storeResult(
-          result,
-          `${step.store_as}_error`,
-          stepError
-        );
-        
-        if (!allowPartial) {
-          throw new Error(
-            `Composite step ${i + 1}/${steps.length} failed: ${stepError.error}\n` +
-            `Completed steps: ${completedSteps}\n` +
-            `Failed step: ${step.call}`
-          );
+      // Process results
+      for (let i = 0; i < levelResults.length; i++) {
+        const promiseResult = levelResults[i];
+        const step = level.steps[i];
+        const originalStepIndex = level.stepIndices[i];
+
+        if (promiseResult.status === 'fulfilled') {
+          // Step completed successfully
+          const response = promiseResult.value;
+          this.storeResult(result, step.store_as, response.body);
+          completedSteps++;
+        } else {
+          // Step failed
+          const error = promiseResult.reason;
+          const stepError: StepError = {
+            step_index: originalStepIndex,
+            step_call: step.call,
+            error: error instanceof Error ? error.message : String(error),
+            timestamp: new Date().toISOString(),
+          };
+
+          errors.push(stepError);
+
+          // Store error in result for debugging
+          this.storeResult(result, `${step.store_as}_error`, stepError);
+
+          if (!allowPartial) {
+            throw new Error(
+              `Composite step ${originalStepIndex + 1}/${steps.length} failed: ${stepError.error}\n` +
+              `Completed steps: ${completedSteps}\n` +
+              `Failed step: ${step.call}`
+            );
+          }
         }
-        
-        // Continue with next step if partial results allowed
       }
     }
 
@@ -113,8 +109,46 @@ export class CompositeExecutor {
   }
 
   /**
+   * Execute single composite step (extracted for parallel execution)
+   *
+   * @param step The composite step to execute
+   * @param stepIndex Original index for error reporting
+   * @param args Arguments for parameter substitution
+   * @param httpClient Optional HTTP client override
+   * @returns Promise resolving to HTTP response
+   */
+  private async executeStep(
+    step: CompositeStep,
+    stepIndex: number,
+    args: Record<string, unknown>,
+    httpClient?: HttpClient
+  ): Promise<{ body: unknown }> {
+    const { method, path, operation } = this.parseCall(step.call);
+
+    if (!operation) {
+      throw new Error(`Operation not found for call: ${step.call}`);
+    }
+
+    // Substitute path parameters from args
+    const resolvedPath = this.resolvePath(path, args);
+
+    // Execute request
+    const client = httpClient || this.httpClient;
+    if (!client) {
+      throw new Error('HTTP client not provided');
+    }
+
+    const response = await client.request(method, resolvedPath, {
+      params: this.extractQueryParams(operation, args),
+      operationId: operation.operationId,
+    });
+
+    return response;
+  }
+
+  /**
    * Parse composite step call syntax
-   * 
+   *
    * Format: "GET /projects/{id}/merge_requests/{iid}"
    */
   private parseCall(call: string): { method: string; path: string; operation: OperationInfo | undefined } {

@@ -3,17 +3,22 @@
   "version": "0.1.0",
   "description": "MCP server for any API specified via OpenAPI specification",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/lib.js",
+  "exports": {
+    ".": "./dist/lib.js",
+    "./cli": "./dist/index.js"
+  },
   "bin": {
-    "mcp-from-openapi": "dist/index.js"
+    "mcp-from-openapi": "./dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "npm run generate-schemas && tsc",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
-    "test": "vitest",
+    "test": "vitest run",
     "test:ui": "vitest --ui",
     "lint": "eslint src --ext .ts",
+    "generate-schemas": "node scripts/generate-schemas.js",
     "validate": "npm run build && node dist/scripts/validate-profile.js",
     "validate:schema": "npm run build && node dist/scripts/validate-schema.js"
   },
@@ -46,7 +51,9 @@
     "eslint": "^9.17.0",
     "msw": "^2.7.0",
     "supertest": "^7.1.4",
+    "ts-to-zod": "^5.0.1",
     "typescript": "^5.7.2",
+    "typescript-json-schema": "^0.65.1",
     "vite": "^6.0.5",
     "vitest": "^2.1.8"
   },

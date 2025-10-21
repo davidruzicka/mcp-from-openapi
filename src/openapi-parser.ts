@@ -8,6 +8,7 @@
 import fs from 'fs/promises';
 import { parse as parseYaml } from 'yaml';
 import type { OpenAPIV3 } from 'openapi-types';
+import { ConfigurationError } from './errors.js';
 import type { OpenAPIIndex, OperationInfo, ParameterInfo, PathInfo, RequestBodyInfo, SchemaInfo } from './types/openapi.js';
 
 export class OpenAPIParser {
@@ -34,7 +35,7 @@ export class OpenAPIParser {
    * happens once; lookups happen on every tool call.
    */
   private buildIndex(): void {
-    if (!this.spec) throw new Error('Spec not loaded');
+    if (!this.spec) throw new ConfigurationError('OpenAPI spec not loaded. Call loadSpec() first.');
 
     const operations = new Map<string, OperationInfo>();
     const paths = new Map<string, PathInfo>();

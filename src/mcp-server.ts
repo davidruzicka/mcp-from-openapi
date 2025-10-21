@@ -16,6 +16,7 @@ import { OpenAPIParser } from './openapi-parser.js';
 import { ProfileLoader } from './profile-loader.js';
 import { ToolGenerator } from './tool-generator.js';
 import { CompositeExecutor } from './composite-executor.js';
+import { ConfigurationError, OperationNotFoundError, ValidationError, AuthenticationError } from './errors.js';
 import { InterceptorChain, HttpClient } from './interceptors.js';
 import { SchemaValidator } from './schema-validator.js';
 import type { Profile, ToolDefinition, AuthInterceptor } from './types/profile.js';
@@ -174,13 +175,14 @@ export class MCPServer {
         const envVarName = authConfig?.value_from_env || 'API_TOKEN';
         const hasEnvToken = !!process.env[envVarName];
         
-        throw new Error(
+        throw new ConfigurationError(
           `HTTP client not initialized. ` +
           `Transport: ${transport}, ` +
           `HasEnvToken(${envVarName}): ${hasEnvToken}, ` +
-          `Suggestion: ${hasHttpTransport 
-            ? 'Send token in Authorization header during initialization' 
-            : `Set ${envVarName} environment variable`}`
+          `Suggestion: ${hasHttpTransport
+            ? 'Send token in Authorization header during initialization'
+            : `Set ${envVarName} environment variable`}`,
+          { transport, hasEnvToken, envVarName, hasHttpTransport }
         );
       }
       return this.httpClient;
@@ -201,15 +203,16 @@ export class MCPServer {
     if (!authToken && !envToken) {
       const authConfig = this.profile?.interceptors?.auth;
       const expectedEnvVar = authConfig?.value_from_env || 'API_TOKEN';
-      throw new Error(
+      throw new AuthenticationError(
         `No auth token found for session ${sessionId}. ` +
-        `Expected token in Authorization/X-API-Token header or ${expectedEnvVar} env var`
+        `Expected token in Authorization/X-API-Token header or ${expectedEnvVar} env var`,
+        { sessionId, expectedEnvVar, hasProfile: !!this.profile }
       );
     }
 
     // Create new client with session-specific interceptor
     if (!this.profile) {
-      throw new Error('Profile not initialized');
+      throw new ConfigurationError('Profile not initialized. Call initialize() first.');
     }
     
     const baseUrl = this.getBaseUrl();
@@ -261,7 +264,7 @@ export class MCPServer {
     // List available tools
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
       if (!this.profile) {
-        throw new Error('Server not initialized');
+        throw new ConfigurationError('Server not initialized. Call initialize() first.');
       }
 
       const tools = this.profile.tools.map(toolDef =>
@@ -274,12 +277,12 @@ export class MCPServer {
     // Execute tool
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       if (!this.profile || !this.httpClient || !this.compositeExecutor) {
-        throw new Error('Server not initialized');
+        throw new ConfigurationError('Server not initialized. Call initialize() first.');
       }
 
       const toolDef = this.profile.tools.find(t => t.name === request.params.name);
       if (!toolDef) {
-        throw new Error(`Tool not found: ${request.params.name}`);
+        throw new OperationNotFoundError(request.params.name);
       }
 
       const args = request.params.arguments || {};
@@ -336,12 +339,20 @@ export class MCPServer {
     const operationId = this.toolGenerator.mapActionToOperation(toolDef, args);
     
     if (!operationId) {
-      throw new Error(`Could not map tool action to operation`);
+      throw new ValidationError(
+        `Could not map tool action to operation`,
+        {
+          toolName: toolDef.name,
+          action: args['action'],
+          resourceType: args['resource_type'],
+          availableOperations: Object.keys(toolDef.operations || {})
+        }
+      );
     }
 
     const operation = this.parser.getOperation(operationId);
     if (!operation) {
-      throw new Error(`Operation not found: ${operationId}`);
+      throw new OperationNotFoundError(operationId);
     }
 
     // Build request
@@ -357,8 +368,9 @@ export class MCPServer {
         const errorDetails = validationResult.errors
           .map(e => `  - ${e.path}: ${e.message}`)
           .join('\n');
-        throw new Error(
-          `Request body validation failed:\n${errorDetails}`
+        throw new ValidationError(
+          `Request body validation failed:\n${errorDetails}`,
+          { operationId, validationErrors: validationResult.errors }
         );
       }
     }
@@ -368,6 +380,7 @@ export class MCPServer {
     const response = await httpClient.request(operation.method, path, {
       params: queryParams,
       body,
+      operationId: operationId,
     });
 
     // Apply response field filtering if configured
@@ -406,9 +419,10 @@ export class MCPServer {
         }
       }
 
-      throw new Error(
+      throw new ValidationError(
         `Missing path parameter: ${key}` +
-        (possibleAliases.length > 0 ? `. Tried aliases: ${possibleAliases.join(', ')}` : '')
+        (possibleAliases.length > 0 ? `. Tried aliases: ${possibleAliases.join(', ')}` : ''),
+        { paramName: key, possibleAliases }
       );
     });
   }
@@ -591,7 +605,7 @@ export class MCPServer {
       // Find tool definition
       const toolDef = this.profile?.tools.find(t => t.name === toolName);
       if (!toolDef) {
-        throw new Error(`Tool not found: ${toolName}`);
+        throw new OperationNotFoundError(toolName);
       }
 
       // Execute tool (reuse existing execution logic)

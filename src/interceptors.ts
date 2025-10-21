@@ -13,6 +13,7 @@ export interface RequestContext {
   url: string;
   headers: Record<string, string>;
   body?: unknown;
+  operationId?: string; // For per-endpoint rate limiting
 }
 
 export interface ResponseContext {
@@ -84,34 +85,73 @@ export class InterceptorChain {
   }
 
   /**
-   * Rate limiter: token bucket algorithm
-   * 
+   * Rate limiter: token bucket algorithm with per-endpoint overrides
+   *
    * Why token bucket: Allows bursts while enforcing average rate. Better UX
    * than strict per-request delays.
+   *
+   * Supports per-endpoint overrides via operationId matching.
    */
   private createRateLimitInterceptor(): InterceptorFn {
     const config = this.config.rate_limit!;
-    const tokensPerMs = config.max_requests_per_minute / TIME.MS_PER_MINUTE;
-    let tokens = config.max_requests_per_minute;
-    let lastRefill = Date.now();
+
+    // Global token bucket state
+    const globalTokensPerMs = config.max_requests_per_minute / TIME.MS_PER_MINUTE;
+    let globalTokens = config.max_requests_per_minute;
+    let globalLastRefill = Date.now();
+
+    // Per-endpoint token buckets (operationId -> bucket state)
+    const endpointBuckets = new Map<string, {
+      tokensPerMs: number;
+      tokens: number;
+      lastRefill: number;
+    }>();
+
+    // Initialize per-endpoint buckets
+    if (config.overrides) {
+      for (const [operationId, override] of Object.entries(config.overrides)) {
+        endpointBuckets.set(operationId, {
+          tokensPerMs: override.max_requests_per_minute / TIME.MS_PER_MINUTE,
+          tokens: override.max_requests_per_minute,
+          lastRefill: Date.now(),
+        });
+      }
+    }
 
     return async (ctx, next) => {
       const now = Date.now();
-      const elapsed = now - lastRefill;
-      
-      // Refill tokens
-      tokens = Math.min(
-        config.max_requests_per_minute,
-        tokens + elapsed * tokensPerMs
-      );
-      lastRefill = now;
 
-      if (tokens < 1) {
-        const waitMs = (1 - tokens) / tokensPerMs;
+      // Choose appropriate bucket: per-endpoint override or global
+      let bucket = {
+        tokensPerMs: globalTokensPerMs,
+        tokens: globalTokens,
+        lastRefill: globalLastRefill,
+      };
+
+      if (ctx.operationId && endpointBuckets.has(ctx.operationId)) {
+        bucket = endpointBuckets.get(ctx.operationId)!;
+      }
+
+      // Refill tokens for the chosen bucket
+      const elapsed = now - bucket.lastRefill;
+      const maxTokens = bucket.tokensPerMs * TIME.MS_PER_MINUTE; // Convert back to max tokens
+
+      bucket.tokens = Math.min(maxTokens, bucket.tokens + elapsed * bucket.tokensPerMs);
+      bucket.lastRefill = now;
+
+      // Check if we need to wait
+      if (bucket.tokens < 1) {
+        const waitMs = (1 - bucket.tokens) / bucket.tokensPerMs;
         await new Promise(resolve => setTimeout(resolve, waitMs));
-        tokens = 0;
+        bucket.tokens = 0;
       } else {
-        tokens -= 1;
+        bucket.tokens -= 1;
+      }
+
+      // Update global state if using global bucket
+      if (!ctx.operationId || !endpointBuckets.has(ctx.operationId)) {
+        globalTokens = bucket.tokens;
+        globalLastRefill = bucket.lastRefill;
       }
 
       return next();
@@ -221,6 +261,7 @@ export class HttpClient {
     params?: Record<string, string | string[]>;
     body?: unknown;
     headers?: Record<string, string>;
+    operationId?: string; // For per-endpoint rate limiting
   } = {}): Promise<ResponseContext> {
     let url = this.baseUrl + path;
 
@@ -239,6 +280,7 @@ export class HttpClient {
         ...options.headers,
       },
       body: options.body,
+      operationId: options.operationId,
     };
 
     return this.interceptors.execute(ctx, async () => {

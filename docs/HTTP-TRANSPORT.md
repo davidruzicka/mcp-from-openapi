@@ -263,6 +263,57 @@ curl -X DELETE http://localhost:3003/mcp \
 curl http://localhost:3003/health
 ```
 
+### Legacy `/sse` alias (deprecated) {#legacy-sse-alias}
+
+> **⚠️ Deprecated**: This endpoint is maintained for backward compatibility only. Use `/mcp` endpoints instead.
+
+For clients expecting the `/sse` endpoint, the server provides a deprecated alias that logs warnings and delegates to the `/mcp` endpoints.
+
+**Supported methods**: POST, GET, DELETE
+
+**All headers, request/response formats, and behavior are identical to `/mcp` endpoints.**
+
+**Example - Initialize (deprecated)**:
+```bash
+curl -X POST http://localhost:3003/sse \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json" \
+  -H "Authorization: Bearer your_token" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 1,
+    "method": "initialize",
+    "params": {
+      "protocolVersion": "2025-03-26",
+      "clientInfo": {
+        "name": "my-client",
+        "version": "1.0.0"
+      }
+    }
+  }'
+```
+
+**Response**: Same as `/mcp` POST
+```
+Mcp-Session-Id: <generated-session-id>
+```
+
+**Example - Open SSE Stream (deprecated)**:
+```bash
+SESSION_ID="<session-id-from-init>"
+curl -N -H "Accept: text/event-stream" \
+  -H "Mcp-Session-Id: $SESSION_ID" \
+  http://localhost:3003/sse
+```
+
+**Example - Terminate Session (deprecated)**:
+```bash
+curl -X DELETE http://localhost:3003/sse \
+  -H "Mcp-Session-Id: $SESSION_ID"
+```
+
+**Migration**: Replace `/sse` with `/mcp` in all client code. No other changes required.
+
 ## Session Management
 
 ### Session Lifecycle
