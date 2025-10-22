@@ -33,15 +33,32 @@ async function main() {
     if (transport === 'http') {
       const host = process.env.MCP_HOST || '127.0.0.1';
       const port = parseInt(process.env.MCP_PORT || '3003', 10);
-      
+
       if (isNaN(port)) {
         throw new Error('Invalid MCP_PORT');
       }
-      
+
       await server.runHttp(host, port);
     } else {
       await server.runStdio();
     }
+
+    // Graceful shutdown handlers
+    const shutdown = async (signal: string) => {
+      logger.info(`Received ${signal}, shutting down gracefully...`);
+      try {
+        await server.stop();
+        logger.info('Server stopped successfully');
+        process.exit(0);
+      } catch (error) {
+        logger.error('Error during shutdown', error as Error);
+        process.exit(1);
+      }
+    };
+
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT', () => shutdown('SIGINT'));
+
   } catch (error) {
     logger.error('Fatal error', error as Error);
     process.exit(1);

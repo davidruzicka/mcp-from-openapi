@@ -681,5 +681,16 @@ export class MCPServer {
       },
     };
   }
+
+  /**
+   * Stop the MCP server gracefully
+   *
+   * Why: Cleanup resources, close connections, allow graceful shutdown
+   */
+  async stop(): Promise<void> {
+    if (this.httpTransport) {
+      await this.httpTransport.stop();
+    }
+  }
 }
 
