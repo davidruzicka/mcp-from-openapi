@@ -552,7 +552,7 @@ export class MCPServer {
   private async handleJsonRpcMessage(message: unknown, sessionId?: string): Promise<unknown> {
     // Handle initialize
     if (this.isInitializeRequest(message)) {
-      return this.handleInitialize(message);
+      return this.handleInitialize(message, sessionId);
     }
 
     // Handle tool calls
@@ -577,21 +577,29 @@ export class MCPServer {
     return req.method === 'tools/call';
   }
 
-  private handleInitialize(message: unknown): unknown {
+  private handleInitialize(message: unknown, sessionId?: string): unknown {
     const req = message as Record<string, unknown>;
+
+    const result: any = {
+      protocolVersion: '2025-03-26',
+      serverInfo: {
+        name: 'mcp-from-openapi',
+        version: '0.1.0',
+      },
+      capabilities: {
+        tools: {},
+      },
+    };
+
+    // Include sessionId if available (for HTTP transport)
+    if (sessionId) {
+      result.sessionId = sessionId;
+    }
+
     return {
       jsonrpc: '2.0',
       id: req.id,
-      result: {
-        protocolVersion: '2025-03-26',
-        serverInfo: {
-          name: 'mcp-from-openapi',
-          version: '0.1.0',
-        },
-        capabilities: {
-          tools: {},
-        },
-      },
+      result,
     };
   }
 

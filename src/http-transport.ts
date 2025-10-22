@@ -415,8 +415,6 @@ export class HttpTransport {
           return;
         }
 
-        const response = await this.messageHandler(body, sessionId);
-
         // Create session on initialization
         let newSessionId: string | undefined;
         if (isInitialization) {
@@ -424,6 +422,8 @@ export class HttpTransport {
           const authToken = this.extractAuthToken(req);
           newSessionId = this.createSession(authToken);
         }
+
+        const response = await this.messageHandler(body, isInitialization ? newSessionId : sessionId);
 
         // Check if client prefers SSE stream
         if (accept.includes('text/event-stream')) {
@@ -600,6 +600,7 @@ export class HttpTransport {
       lastEventId: lastEventId ? parseInt(lastEventId, 10) : 0,
       messageQueue: [],
       active: true,
+      response: res,
     };
 
     session.sseStreams.set(streamId, streamState);
@@ -768,6 +769,15 @@ export class HttpTransport {
       // Close all active SSE streams
       for (const [, streamState] of session.sseStreams) {
         streamState.active = false;
+        // Close the HTTP response to terminate the SSE connection
+        try {
+          if (!streamState.response.headersSent || !streamState.response.writableEnded) {
+            streamState.response.end();
+          }
+        } catch (error) {
+          // Ignore errors if response is already closed
+          this.logger.debug('Failed to close SSE response', { error: (error as Error).message });
+        }
       }
       session.sseStreams.clear();
       

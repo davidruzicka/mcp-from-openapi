@@ -5,7 +5,7 @@
  * https://modelcontextprotocol.io/specification/2025-03-26/basic/transports
  */
 
-import type { Request as ExpressRequest } from 'express';
+import type { Request as ExpressRequest, Response } from 'express';
 
 export interface SessionData {
   id: string;
@@ -20,6 +20,7 @@ export interface SSEStreamState {
   lastEventId: number;
   messageQueue: QueuedMessage[];
   active: boolean;
+  response: Response; // HTTP response object for closing the stream
 }
 
 export interface QueuedMessage {
