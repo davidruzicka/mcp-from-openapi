@@ -3237,6 +3237,40 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/API_Entities_MergeRequestBasic'
+    delete:
+      tags:
+        - merge_requests
+      summary: Delete merge request
+      description: Delete a merge request (only for administrators and project owners)
+      operationId: deleteApiV4ProjectsIdMergeRequestsMergeRequestIid
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The ID or URL-encoded path of the project
+          schema:
+            type: string
+        - name: merge_request_iid
+          in: path
+          required: true
+          description: The internal ID of the merge request
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Merge request deleted successfully
+        '403':
+          description: Forbidden - only administrators and project owners can delete merge requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/API_Error'
+        '404':
+          description: Merge request not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/API_Error'
   /projects/{id}/issues:
     get:
       tags:

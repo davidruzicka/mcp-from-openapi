@@ -9,7 +9,7 @@ import { describe, it, expect, beforeAll, afterAll, afterEach } from 'vitest';
 import path from 'path';
 import { MCPServer } from '../mcp-server.js';
 import { startMockServer, resetMockServer, stopMockServer } from './mock-gitlab-server.js';
-import type { Badge, Branch, AccessRequest, Job } from './test-types.js';
+import type { Badge, Branch, AccessRequest, Job, MergeRequest } from './test-types.js';
 
 describe('Integration Tests', () => {
   let server: MCPServer;
@@ -320,6 +320,80 @@ describe('Integration Tests', () => {
       );
 
       expect((result as Job).status).toBe('pending');
+    });
+  });
+
+  describe('manage_merge_requests', () => {
+    it('should list merge requests', async () => {
+      const result = await server['executeSimpleTool'](
+        server['profile']!.tools.find(t => t.name === 'manage_merge_requests')!,
+        {
+          project_id: 'my-org/my-project',
+          action: 'list',
+          page: 1,
+          per_page: 20,
+        }
+      );
+
+      expect(result).toBeDefined();
+      const mergeRequests = result as MergeRequest[];
+      expect(mergeRequests).toHaveLength(2);
+      expect(mergeRequests[0].title).toBe('Implement new feature');
+      expect(mergeRequests[0].state).toBe('opened');
+    });
+
+    it('should get merge request details', async () => {
+      const result = await server['executeSimpleTool'](
+        server['profile']!.tools.find(t => t.name === 'manage_merge_requests')!,
+        {
+          project_id: 'my-org/my-project',
+          action: 'get',
+          merge_request_iid: 1,
+        }
+      );
+
+      expect(result).toBeDefined();
+      const mergeRequest = result as MergeRequest;
+      expect(mergeRequest.iid).toBe(1);
+      expect(mergeRequest.title).toBe('Implement new feature');
+      expect(mergeRequest.source_branch).toBe('feature/new-feature');
+      expect(mergeRequest.target_branch).toBe('main');
+    });
+
+    it('should create merge request', async () => {
+      const result = await server['executeSimpleTool'](
+        server['profile']!.tools.find(t => t.name === 'manage_merge_requests')!,
+        {
+          project_id: 'my-org/my-project',
+          action: 'create',
+          source_branch: 'feature/test-branch',
+          target_branch: 'main',
+          title: 'Test merge request creation',
+          description: 'This is a test merge request created by integration test.',
+        }
+      );
+
+      expect(result).toBeDefined();
+      const mergeRequest = result as MergeRequest;
+      expect(mergeRequest.iid).toBe(3);
+      expect(mergeRequest.title).toBe('Test merge request creation');
+      expect(mergeRequest.state).toBe('opened');
+      expect(mergeRequest.web_url).toBe('https://gitlab.com/my-org/my-project/-/merge_requests/3');
+      expect(mergeRequest.created_at).toBeDefined();
+    });
+
+    it('should delete merge request', async () => {
+      const result = await server['executeSimpleTool'](
+        server['profile']!.tools.find(t => t.name === 'manage_merge_requests')!,
+        {
+          project_id: 'my-org/my-project',
+          action: 'delete',
+          merge_request_iid: 1,
+        }
+      );
+
+      // 204 No Content returns empty body
+      expect(result).toBeDefined();
     });
   });
 

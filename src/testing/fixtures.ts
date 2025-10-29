@@ -141,3 +141,42 @@ export const mockAccessRequestsList = [
   },
 ];
 
+export const mockMergeRequest = {
+  id: 1,
+  iid: 1,
+  title: 'Implement new feature',
+  description: 'This implements the new feature requested by the team.',
+  state: 'opened',
+  web_url: 'https://gitlab.com/my-org/my-project/-/merge_requests/1',
+  author: {
+    id: 1,
+    name: 'John Smith',
+    username: 'john_smith',
+  },
+  source_branch: 'feature/new-feature',
+  target_branch: 'main',
+  created_at: '2017-07-26T11:08:53+02:00',
+  updated_at: '2017-07-26T11:08:53+02:00',
+};
+
+export const mockMergeRequestsList = [
+  mockMergeRequest,
+  {
+    id: 2,
+    iid: 2,
+    title: 'Fix bug in authentication',
+    description: 'Fixes critical authentication bug reported by QA.',
+    state: 'merged',
+    web_url: 'https://gitlab.com/my-org/my-project/-/merge_requests/2',
+    author: {
+      id: 2,
+      name: 'Jane Doe',
+      username: 'jane_doe',
+    },
+    source_branch: 'bugfix/auth-fix',
+    target_branch: 'main',
+    created_at: '2017-07-25T10:08:53+02:00',
+    updated_at: '2017-07-26T09:08:53+02:00',
+  },
+];
+

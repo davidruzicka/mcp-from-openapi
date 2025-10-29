@@ -239,6 +239,61 @@ export const handlers = [
     );
   }),
 
+  // Merge Requests
+  http.get(`${BASE_URL}/projects/*/merge_requests`, ({ request, params }) => {
+    const url = new URL(request.url);
+    const page = parseInt(url.searchParams.get('page') || '1', 10);
+
+    // Simple pagination
+    if (page === 1) {
+      return HttpResponse.json(fixtures.mockMergeRequestsList);
+    }
+    return HttpResponse.json([]);
+  }),
+
+  http.get(`${BASE_URL}/projects/*/merge_requests/*`, ({ request }) => {
+    // Extract merge request IID from URL
+    const mergeRequestIid = parseInt(request.url.split('/').pop() || '0', 10);
+    if (mergeRequestIid === 1) {
+      return HttpResponse.json(fixtures.mockMergeRequest);
+    }
+    return HttpResponse.json({ message: 'Not Found' }, { status: 404 });
+  }),
+
+  http.post(`${BASE_URL}/projects/*/merge_requests`, async ({ request }) => {
+    const body = await request.json() as Record<string, unknown>;
+
+    if (!body.source_branch || !body.target_branch || !body.title) {
+      return HttpResponse.json(
+        { error: 'source_branch, target_branch, and title are required' },
+        { status: 400 }
+      );
+    }
+
+    // Return created merge request
+    const createdMR = {
+      ...fixtures.mockMergeRequest,
+      iid: 3,
+      id: 3,
+      title: body.title,
+      source_branch: body.source_branch,
+      target_branch: body.target_branch,
+      description: body.description,
+      web_url: 'https://gitlab.com/my-org/my-project/-/merge_requests/3',
+    };
+
+    return HttpResponse.json(createdMR, { status: 201 });
+  }),
+
+  http.delete(`${BASE_URL}/projects/*/merge_requests/*`, ({ request }) => {
+    // Extract merge request IID from URL
+    const mergeRequestIid = parseInt(request.url.split('/').pop() || '0', 10);
+    if (mergeRequestIid === 1) {
+      return new HttpResponse(null, { status: 204 });
+    }
+    return HttpResponse.json({ message: 'Not Found' }, { status: 404 });
+  }),
+
   // Server error simulation
   http.get(`${BASE_URL}/server-error-test`, () => {
     return HttpResponse.json(

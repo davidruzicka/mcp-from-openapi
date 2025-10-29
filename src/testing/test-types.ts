@@ -49,6 +49,24 @@ export interface Job {
   };
 }
 
+export interface MergeRequest {
+  id: number;
+  iid: number;
+  title: string;
+  description?: string;
+  state: string;
+  web_url: string;
+  author: {
+    id: number;
+    name: string;
+    username: string;
+  };
+  source_branch: string;
+  target_branch: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface CompositeResult {
   data: Record<string, unknown>;
   completed_steps: number;
@@ -65,6 +83,8 @@ export type McpToolResult =
   | AccessRequest
   | Job[]
   | Job
+  | MergeRequest[]
+  | MergeRequest
   | CompositeResult
   | { status: string };
 

@@ -116,12 +116,13 @@
 
     {
       "name": "manage_merge_requests",
-      "description": "Work with merge requests. Actions: 'list' (all MRs in project), 'get' (single MR details), 'create' (create new MR). Use 'list' to see all merge requests, filter by state (opened, closed, merged, all).",
+      "description": "Work with merge requests. Actions: 'list' (all MRs in project), 'get' (single MR details), 'create' (create new MR), 'delete' (delete MR - admins only). Use 'list' to see all merge requests, filter by state (opened, closed, merged, all).",
       "metadata_params": ["action", "project_id", "merge_request_iid"],
       "operations": {
         "list": "getApiV4ProjectsIdMergeRequests",
         "get": "getApiV4ProjectsIdMergeRequestsMergeRequestIid",
-        "create": "postApiV4ProjectsIdMergeRequests"
+        "create": "postApiV4ProjectsIdMergeRequests",
+        "delete": "deleteApiV4ProjectsIdMergeRequestsMergeRequestIid"
       },
       "response_fields": {
         "list": ["id", "iid", "title", "description", "state", "web_url", "author", "created_at", "updated_at"],
@@ -130,7 +131,7 @@
       "parameters": {
         "action": {
           "type": "string",
-          "enum": ["list", "get", "create"],
+          "enum": ["list", "get", "create", "delete"],
           "description": "Action to perform",
           "required": true
         },
