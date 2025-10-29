@@ -3092,6 +3092,124 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/API_Entities_MergeRequestBasic'
+    post:
+      tags:
+        - merge_requests
+      summary: Create merge request
+      description: Create a new merge request for a project
+      operationId: postApiV4ProjectsIdMergeRequests
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: The ID or URL-encoded path of the project
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - source_branch
+                - target_branch
+                - title
+              properties:
+                source_branch:
+                  type: string
+                  description: The source branch name
+                  example: "feature/new-feature"
+                target_branch:
+                  type: string
+                  description: The target branch name
+                  example: "main"
+                title:
+                  type: string
+                  description: The title of the merge request
+                  example: "Implement new feature"
+                description:
+                  type: string
+                  description: The description of the merge request
+                  example: "This implements the new feature requested by the team."
+                assignee_id:
+                  type: integer
+                  description: The ID of the user to assign the merge request to
+                  example: 123
+                assignee_ids:
+                  type: array
+                  items:
+                    type: integer
+                  description: The IDs of the users to assign the merge request to
+                  example: [123, 456]
+                reviewer_ids:
+                  type: array
+                  items:
+                    type: integer
+                  description: The IDs of the users to review the merge request
+                  example: [789, 101]
+                labels:
+                  type: string
+                  description: Labels to be added to the merge request (comma-separated)
+                  example: "bug,feature,frontend"
+                milestone_id:
+                  type: integer
+                  description: The ID of the milestone to assign the merge request to
+                  example: 42
+                allow_collaboration:
+                  type: boolean
+                  description: Allow commits from the target branch to be pushed to the source branch
+                  default: false
+                  example: true
+                allow_maintainer_to_push:
+                  type: boolean
+                  description: Allow maintainers to push to the source branch
+                  default: false
+                  example: true
+                squash:
+                  type: boolean
+                  description: Squash commits when merge request is accepted
+                  default: false
+                  example: true
+                target_project_id:
+                  type: integer
+                  description: The target project ID (when creating merge request across projects)
+                  example: 789
+                remove_source_branch:
+                  type: boolean
+                  description: Remove the source branch when the merge request is accepted
+                  default: false
+                  example: true
+                draft:
+                  type: boolean
+                  description: Mark the merge request as a draft
+                  default: false
+                  example: false
+      responses:
+        '201':
+          description: Merge request created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/API_Entities_MergeRequest'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/API_Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/API_Error'
+        '404':
+          description: Project not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/API_Error'
   /projects/{id}/merge_requests/{merge_request_iid}:
     get:
       tags:

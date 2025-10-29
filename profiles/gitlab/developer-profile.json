@@ -33,7 +33,7 @@
         "action": {
           "type": "string",
           "enum": ["list", "get", "list_projects", "list_subgroups"],
-          "description": "Operation to perform",
+          "description": "Action to perform",
           "required": true
         },
         "group_id": {
@@ -81,7 +81,7 @@
         "action": {
           "type": "string",
           "enum": ["list", "get"],
-          "description": "Operation to perform",
+          "description": "Action to perform",
           "required": true
         },
         "project_id": {
@@ -116,20 +116,22 @@
 
     {
       "name": "manage_merge_requests",
-      "description": "Work with merge requests. Actions: 'list' (all MRs in project), 'get' (single MR details). Use 'list' to see all merge requests, filter by state (opened, closed, merged, all).",
+      "description": "Work with merge requests. Actions: 'list' (all MRs in project), 'get' (single MR details), 'create' (create new MR). Use 'list' to see all merge requests, filter by state (opened, closed, merged, all).",
       "metadata_params": ["action", "project_id", "merge_request_iid"],
       "operations": {
         "list": "getApiV4ProjectsIdMergeRequests",
-        "get": "getApiV4ProjectsIdMergeRequestsMergeRequestIid"
+        "get": "getApiV4ProjectsIdMergeRequestsMergeRequestIid",
+        "create": "postApiV4ProjectsIdMergeRequests"
       },
       "response_fields": {
-        "list": ["id", "iid", "title", "description", "state", "web_url", "author", "created_at", "updated_at"]
+        "list": ["id", "iid", "title", "description", "state", "web_url", "author", "created_at", "updated_at"],
+        "create": ["id", "iid", "title", "description", "state", "web_url", "author", "created_at"]
       },
       "parameters": {
         "action": {
           "type": "string",
-          "enum": ["list", "get"],
-          "description": "Operation to perform",
+          "enum": ["list", "get", "create"],
+          "description": "Action to perform",
           "required": true
         },
         "project_id": {
@@ -141,6 +143,95 @@
           "type": "integer",
           "description": "The internal ID of the merge request",
           "required_for": ["get"]
+        },
+        "source_branch": {
+          "type": "string",
+          "description": "The source branch name (required for create)",
+          "required_for": ["create"],
+          "example": "feature/new-feature"
+        },
+        "target_branch": {
+          "type": "string",
+          "description": "The target branch name (required for create)",
+          "required_for": ["create"],
+          "example": "main"
+        },
+        "title": {
+          "type": "string",
+          "description": "The title of the merge request (required for create)",
+          "required_for": ["create"],
+          "example": "Implement new feature"
+        },
+        "description": {
+          "type": "string",
+          "description": "The description of the merge request (optional for create)",
+          "example": "This implements the new feature requested by the team."
+        },
+        "assignee_id": {
+          "type": "integer",
+          "description": "The ID of the user to assign the merge request to (optional for create)",
+          "example": 123
+        },
+        "assignee_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "The IDs of the users to assign the merge request to (optional for create)",
+          "example": [123, 456]
+        },
+        "reviewer_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "The IDs of the users to review the merge request (optional for create)",
+          "example": [789, 101]
+        },
+        "labels": {
+          "type": "string",
+          "description": "Labels to be added to the merge request (comma-separated, optional for create)",
+          "example": "bug,feature,frontend"
+        },
+        "milestone_id": {
+          "type": "integer",
+          "description": "The ID of the milestone to assign the merge request to (optional for create)",
+          "example": 42
+        },
+        "allow_collaboration": {
+          "type": "boolean",
+          "description": "Allow commits from the target branch to be pushed to the source branch (optional for create)",
+          "default": false,
+          "example": true
+        },
+        "allow_maintainer_to_push": {
+          "type": "boolean",
+          "description": "Allow maintainers to push to the source branch (optional for create)",
+          "default": false,
+          "example": true
+        },
+        "squash": {
+          "type": "boolean",
+          "description": "Squash commits when merge request is accepted (optional for create)",
+          "default": false,
+          "example": true
+        },
+        "target_project_id": {
+          "type": "integer",
+          "description": "The target project ID (when creating merge request across projects, optional for create)",
+          "example": 789
+        },
+        "remove_source_branch": {
+          "type": "boolean",
+          "description": "Remove the source branch when the merge request is accepted (optional for create)",
+          "default": false,
+          "example": true
+        },
+        "draft": {
+          "type": "boolean",
+          "description": "Mark the merge request as a draft (optional for create)",
+          "default": false,
+          "example": false
         },
         "state": {
           "type": "string",
@@ -176,7 +267,7 @@
         "action": {
           "type": "string",
           "enum": ["list", "get"],
-          "description": "Operation to perform",
+          "description": "Action to perform",
           "required": true
         },
         "project_id": {
@@ -228,7 +319,7 @@
         "action": {
           "type": "string",
           "enum": ["list", "get", "create", "update", "delete"],
-          "description": "Operation to perform",
+          "description": "Action to perform",
           "required": true
         },
         "badge_id": {
