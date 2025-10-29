@@ -38,7 +38,7 @@
         },
         "group_id": {
           "type": "string",
-          "description": "Group ID or URL-encoded path (e.g. 'AI-Adoption')",
+          "description": "Group ID (e.g. 'AI-Adoption')",
           "required_for": ["get", "list_projects", "list_subgroups"]
         },
         "page": {
@@ -86,7 +86,7 @@
         },
         "project_id": {
           "type": "string",
-          "description": "Project ID or URL-encoded path (e.g. 'my-org/my-project')",
+          "description": "Project ID (e.g. 'my-org/my-project')",
           "required_for": ["get"]
         },
         "page": {
@@ -137,7 +137,7 @@
         },
         "project_id": {
           "type": "string",
-          "description": "Project ID or URL-encoded path",
+          "description": "Project ID",
           "required": true
         },
         "merge_request_iid": {
@@ -273,7 +273,7 @@
         },
         "project_id": {
           "type": "string",
-          "description": "Project ID or URL-encoded path",
+          "description": "Project ID",
           "required": true
         },
         "issue_iid": {
@@ -314,7 +314,7 @@
       "parameters": {
         "project_id": {
           "type": "string",
-          "description": "Project ID or URL-encoded path like 'my-org/my-project'",
+          "description": "Project ID",
           "required": true
         },
         "action": {
@@ -370,7 +370,7 @@
       "parameters": {
         "project_id": {
           "type": "string",
-          "description": "Project ID or URL-encoded path",
+          "description": "Project ID",
           "required": true
         },
         "action": {
@@ -462,7 +462,7 @@
       "parameters": {
         "project_id": {
           "type": "string",
-          "description": "Project ID or URL-encoded path",
+          "description": "Project ID",
           "required": true
         },
         "scope": {
@@ -483,7 +483,7 @@
       "parameters": {
         "project_id": {
           "type": "string",
-          "description": "Project ID or URL-encoded path",
+          "description": "Project ID",
           "required": true
         },
         "action": {
