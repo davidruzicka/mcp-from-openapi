@@ -12,6 +12,29 @@ import * as fixtures from './fixtures.js';
 const BASE_URL = 'https://gitlab.com/api/v4';
 
 /**
+ * Helper: Extract and validate IID from URL
+ * 
+ * Why: Prevents path traversal and invalid integer attacks
+ * Returns null if invalid (caller should return 400 Bad Request)
+ */
+function extractIidFromUrl(url: string): number | null {
+  const parts = url.split('/');
+  const iidStr = parts[parts.length - 1];
+  
+  // Validate it's a positive integer
+  if (!iidStr || !/^\d+$/.test(iidStr)) {
+    return null;
+  }
+  
+  const iid = parseInt(iidStr, 10);
+  if (isNaN(iid) || iid < 1 || iid > 2147483647) {
+    return null;
+  }
+  
+  return iid;
+}
+
+/**
  * Mock GitLab API endpoints
  * 
  * Why ordered by resource: Mirrors actual GitLab API structure for maintainability
@@ -32,8 +55,10 @@ export const handlers = [
   }),
 
   http.get(`${BASE_URL}/projects/*/badges/*`, ({ request }) => {
-    // Extract badge ID from URL
-    const badgeId = parseInt(request.url.split('/').pop() || '0', 10);
+    const badgeId = extractIidFromUrl(request.url);
+    if (badgeId === null) {
+      return HttpResponse.json({ error: 'Invalid badge ID' }, { status: 400 });
+    }
     if (badgeId === 1) {
       return HttpResponse.json(fixtures.mockBadge);
     }
@@ -60,7 +85,10 @@ export const handlers = [
   }),
 
   http.put(`${BASE_URL}/projects/*/badges/*`, async ({ request }) => {
-    const badgeId = parseInt(request.url.split('/').pop() || '0', 10);
+    const badgeId = extractIidFromUrl(request.url);
+    if (badgeId === null) {
+      return HttpResponse.json({ error: 'Invalid badge ID' }, { status: 400 });
+    }
     const body = await request.json() as Record<string, unknown>;
 
     if (badgeId === 1) {
@@ -75,7 +103,10 @@ export const handlers = [
   }),
 
   http.delete(`${BASE_URL}/projects/*/badges/*`, ({ request }) => {
-    const badgeId = parseInt(request.url.split('/').pop() || '0', 10);
+    const badgeId = extractIidFromUrl(request.url);
+    if (badgeId === null) {
+      return HttpResponse.json({ error: 'Invalid badge ID' }, { status: 400 });
+    }
     if (badgeId === 1) {
       return new HttpResponse(null, { status: 204 });
     }
@@ -214,7 +245,10 @@ export const handlers = [
   }),
 
   http.get(`${BASE_URL}/projects/*/jobs/*`, ({ request }) => {
-    const jobId = parseInt(request.url.split('/').pop() || '0', 10);
+    const jobId = extractIidFromUrl(request.url);
+    if (jobId === null) {
+      return HttpResponse.json({ error: 'Invalid job ID' }, { status: 400 });
+    }
     if (jobId === 1234) {
       return HttpResponse.json(fixtures.mockJob);
     }
@@ -252,8 +286,10 @@ export const handlers = [
   }),
 
   http.get(`${BASE_URL}/projects/*/merge_requests/*`, ({ request }) => {
-    // Extract merge request IID from URL
-    const mergeRequestIid = parseInt(request.url.split('/').pop() || '0', 10);
+    const mergeRequestIid = extractIidFromUrl(request.url);
+    if (mergeRequestIid === null) {
+      return HttpResponse.json({ error: 'Invalid merge request IID' }, { status: 400 });
+    }
     if (mergeRequestIid === 1) {
       return HttpResponse.json(fixtures.mockMergeRequest);
     }
@@ -286,9 +322,84 @@ export const handlers = [
   }),
 
   http.delete(`${BASE_URL}/projects/*/merge_requests/*`, ({ request }) => {
-    // Extract merge request IID from URL
-    const mergeRequestIid = parseInt(request.url.split('/').pop() || '0', 10);
+    // Check for forbidden project
+    if (request.url.includes('/forbidden-project/')) {
+      return HttpResponse.json(
+        { message: 'Forbidden', error: 'You do not have permission to delete this merge request' },
+        { status: 403 }
+      );
+    }
+    
+    const mergeRequestIid = extractIidFromUrl(request.url);
+    if (mergeRequestIid === null) {
+      return HttpResponse.json({ error: 'Invalid merge request IID' }, { status: 400 });
+    }
     if (mergeRequestIid === 1) {
+      return new HttpResponse(null, { status: 204 });
+    }
+    return HttpResponse.json({ message: 'Not Found' }, { status: 404 });
+  }),
+
+  // Issues
+  http.get(`${BASE_URL}/projects/*/issues`, ({ request }) => {
+    const url = new URL(request.url);
+    const page = parseInt(url.searchParams.get('page') || '1', 10);
+
+    // Simple pagination
+    if (page === 1) {
+      return HttpResponse.json(fixtures.mockIssuesList);
+    }
+    return HttpResponse.json([]);
+  }),
+
+  http.get(`${BASE_URL}/projects/*/issues/*`, ({ request }) => {
+    const issueIid = extractIidFromUrl(request.url);
+    if (issueIid === null) {
+      return HttpResponse.json({ error: 'Invalid issue IID' }, { status: 400 });
+    }
+    if (issueIid === 1) {
+      return HttpResponse.json(fixtures.mockIssue);
+    }
+    return HttpResponse.json({ message: 'Not Found' }, { status: 404 });
+  }),
+
+  http.post(`${BASE_URL}/projects/*/issues`, async ({ request }) => {
+    const body = await request.json() as Record<string, unknown>;
+
+    // Validate required fields
+    if (!body.title) {
+      return HttpResponse.json({ error: 'title is required' }, { status: 400 });
+    }
+
+    // Return created issue
+    const createdIssue = {
+      ...fixtures.mockIssue,
+      iid: 3,
+      id: 3,
+      title: body.title as string,
+      description: (body.description as string) || '',
+      state: 'opened',
+      web_url: 'https://gitlab.com/my-org/my-project/-/issues/3',
+      created_at: new Date().toISOString(),
+    };
+
+    return HttpResponse.json(createdIssue, { status: 201 });
+  }),
+
+  http.delete(`${BASE_URL}/projects/*/issues/*`, ({ request }) => {
+    // Check for forbidden project
+    if (request.url.includes('/forbidden-project/')) {
+      return HttpResponse.json(
+        { message: 'Forbidden', error: 'You do not have permission to delete this issue' },
+        { status: 403 }
+      );
+    }
+    
+    const issueIid = extractIidFromUrl(request.url);
+    if (issueIid === null) {
+      return HttpResponse.json({ error: 'Invalid issue IID' }, { status: 400 });
+    }
+    if (issueIid === 1) {
       return new HttpResponse(null, { status: 204 });
     }
     return HttpResponse.json({ message: 'Not Found' }, { status: 404 });

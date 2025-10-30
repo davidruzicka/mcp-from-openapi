@@ -38,8 +38,9 @@
         },
         "group_id": {
           "type": "string",
-          "description": "Group ID (e.g. 'AI-Adoption')",
-          "required_for": ["get", "list_projects", "list_subgroups"]
+          "description": "Group ID (numeric like '36173' or short name like 'ai-adoption')",
+          "required_for": ["get", "list_projects", "list_subgroups"],
+          "example": "ai-adoption"
         },
         "page": {
           "type": "integer",
@@ -48,7 +49,7 @@
         },
         "per_page": {
           "type": "integer",
-          "description": "Items per page (max 100)",
+          "description": "Items per page (recommended max 100)",
           "default": 20
         },
         "search": {
@@ -86,8 +87,9 @@
         },
         "project_id": {
           "type": "string",
-          "description": "Project ID (e.g. 'my-org/my-project')",
-          "required_for": ["get"]
+          "description": "Project ID (numeric like '123' or URL-encoded path like 'group%2Fproject')",
+          "required_for": ["get"],
+          "example": "123"
         },
         "page": {
           "type": "integer",
@@ -96,7 +98,7 @@
         },
         "per_page": {
           "type": "integer",
-          "description": "Items per page (max 100)",
+          "description": "Items per page (recommended max 100)",
           "default": 20
         },
         "search": {
@@ -137,8 +139,9 @@
         },
         "project_id": {
           "type": "string",
-          "description": "Project ID",
-          "required": true
+          "description": "Project ID (numeric like '123' or URL-encoded path like 'group%2Fproject')",
+          "required": true,
+          "example": "123"
         },
         "merge_request_iid": {
           "type": "integer",
@@ -255,31 +258,35 @@
 
     {
       "name": "manage_issues",
-      "description": "Work with issues. Actions: 'list' (all issues in project), 'get' (single issue details). Use 'list' to see all issues, filter by state (opened, closed, all).",
+      "description": "Work with issues. Actions: 'list' (all issues in project), 'get' (single issue details), 'create' (create new issue), 'delete' (delete issue - admins only). Use 'list' to see all issues, filter by state (opened, closed, all).",
       "metadata_params": ["action", "project_id", "issue_iid"],
       "operations": {
         "list": "getApiV4ProjectsIdIssues",
-        "get": "getApiV4ProjectsIdIssuesIssueIid"
+        "get": "getApiV4ProjectsIdIssuesIssueIid",
+        "create": "postApiV4ProjectsIdIssues",
+        "delete": "deleteApiV4ProjectsIdIssuesIssueIid"
       },
       "response_fields": {
-        "list": ["id", "iid", "title", "description", "state", "web_url", "author", "created_at", "updated_at"]
+        "list": ["id", "iid", "title", "description", "state", "web_url", "author", "created_at", "updated_at"],
+        "create": ["id", "iid", "title", "description", "state", "web_url", "author", "created_at"]
       },
       "parameters": {
         "action": {
           "type": "string",
-          "enum": ["list", "get"],
+          "enum": ["list", "get", "create", "delete"],
           "description": "Action to perform",
           "required": true
         },
         "project_id": {
           "type": "string",
-          "description": "Project ID",
-          "required": true
+          "description": "Project ID (numeric like '123' or URL-encoded path like 'group%2Fproject')",
+          "required": true,
+          "example": "123"
         },
         "issue_iid": {
           "type": "integer",
           "description": "The internal ID of the issue",
-          "required_for": ["get"]
+          "required_for": ["get", "delete"]
         },
         "state": {
           "type": "string",
@@ -291,6 +298,58 @@
           "type": "integer",
           "description": "Page number for pagination",
           "default": 1
+        },
+        "title": {
+          "type": "string",
+          "description": "The title of the issue (required for create)",
+          "required_for": ["create"],
+          "example": "Implement new feature"
+        },
+        "description": {
+          "type": "string",
+          "description": "The description of the issue (optional for create)",
+          "example": "This implements the new feature requested by the team."
+        },
+        "assignee_id": {
+          "type": "integer",
+          "description": "The ID of the user to assign the issue to (optional for create)",
+          "example": 123
+        },
+        "assignee_ids": {
+          "type": "array",
+          "items": {
+            "type": "integer"
+          },
+          "description": "The IDs of the users to assign the issue to (optional for create)",
+          "example": [123, 456]
+        },
+        "labels": {
+          "type": "string",
+          "description": "Labels to be added to the issue (comma-separated, optional for create)",
+          "example": "bug,feature,frontend"
+        },
+        "milestone_id": {
+          "type": "integer",
+          "description": "The ID of the milestone to assign the issue to (optional for create)",
+          "example": 42
+        },
+        "due_date": {
+          "type": "string",
+          "format": "date",
+          "description": "The due date of the issue (optional for create)",
+          "example": "2024-12-31"
+        },
+        "confidential": {
+          "type": "boolean",
+          "description": "Whether the issue should be confidential (optional for create)",
+          "default": false,
+          "example": false
+        },
+        "weight": {
+          "type": "integer",
+          "description": "The weight of the issue (optional for create)",
+          "minimum": 0,
+          "example": 5
         },
         "per_page": {
           "type": "integer",
@@ -314,8 +373,9 @@
       "parameters": {
         "project_id": {
           "type": "string",
-          "description": "Project ID",
-          "required": true
+          "description": "Project ID (numeric like '123' or URL-encoded path like 'group%2Fproject')",
+          "required": true,
+          "example": "123"
         },
         "action": {
           "type": "string",
@@ -370,8 +430,9 @@
       "parameters": {
         "project_id": {
           "type": "string",
-          "description": "Project ID",
-          "required": true
+          "description": "Project ID (numeric like '123' or URL-encoded path like 'group%2Fproject')",
+          "required": true,
+          "example": "123"
         },
         "action": {
           "type": "string",
@@ -431,8 +492,9 @@
         },
         "resource_id": {
           "type": "string",
-          "description": "Project or group ID",
-          "required": true
+          "description": "Project ID (numeric or URL-encoded path) or Group ID (numeric or short name)",
+          "required": true,
+          "example": "ai-adoption"
         },
         "action": {
           "type": "string",
@@ -462,8 +524,9 @@
       "parameters": {
         "project_id": {
           "type": "string",
-          "description": "Project ID",
-          "required": true
+          "description": "Project ID (numeric like '123' or URL-encoded path like 'group%2Fproject')",
+          "required": true,
+          "example": "123"
         },
         "scope": {
           "type": "array",
@@ -483,8 +546,9 @@
       "parameters": {
         "project_id": {
           "type": "string",
-          "description": "Project ID",
-          "required": true
+          "description": "Project ID (numeric like '123' or URL-encoded path like 'group%2Fproject')",
+          "required": true,
+          "example": "123"
         },
         "action": {
           "type": "string",
@@ -512,7 +576,21 @@
       "default": "https://gitlab.com/api/v4"
     },
     "rate_limit": {
-      "max_requests_per_minute": 600
+      "max_requests_per_minute": 600,
+      "overrides": {
+        "postApiV4ProjectsIdIssues": {
+          "max_requests_per_minute": 10
+        },
+        "deleteApiV4ProjectsIdIssuesIssueIid": {
+          "max_requests_per_minute": 5
+        },
+        "postApiV4ProjectsIdMergeRequests": {
+          "max_requests_per_minute": 10
+        },
+        "deleteApiV4ProjectsIdMergeRequestsMergeRequestIid": {
+          "max_requests_per_minute": 5
+        }
+      }
     },
     "retry": {
       "max_attempts": 3,

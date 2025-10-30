@@ -397,6 +397,119 @@ describe('Integration Tests', () => {
     });
   });
 
+  describe('manage_issues', () => {
+    it('should list issues', async () => {
+      const result = await server['executeSimpleTool'](
+        server['profile']!.tools.find(t => t.name === 'manage_issues')!,
+        {
+          project_id: 'my-org/my-project',
+          action: 'list',
+        }
+      );
+
+      expect(result).toBeDefined();
+      const issues = result as Issue[];
+      expect(Array.isArray(issues)).toBe(true);
+      expect(issues.length).toBeGreaterThan(0);
+      expect(issues[0].title).toBe('Bug in authentication');
+      expect(issues[0].state).toBe('opened');
+    });
+
+    it('should get single issue', async () => {
+      const result = await server['executeSimpleTool'](
+        server['profile']!.tools.find(t => t.name === 'manage_issues')!,
+        {
+          project_id: 'my-org/my-project',
+          action: 'get',
+          issue_iid: 1,
+        }
+      );
+
+      expect(result).toBeDefined();
+      const issue = result as Issue;
+      expect(issue.iid).toBe(1);
+      expect(issue.title).toBe('Bug in authentication');
+      expect(issue.state).toBe('opened');
+    });
+
+    it('should create issue', async () => {
+      const result = await server['executeSimpleTool'](
+        server['profile']!.tools.find(t => t.name === 'manage_issues')!,
+        {
+          project_id: 'my-org/my-project',
+          action: 'create',
+          title: 'Test issue creation',
+          description: 'This is a test issue created by integration test.',
+          labels: 'bug,test',
+        }
+      );
+
+      expect(result).toBeDefined();
+      const issue = result as Issue;
+      expect(issue.iid).toBe(3);
+      expect(issue.title).toBe('Test issue creation');
+      expect(issue.state).toBe('opened');
+      expect(issue.web_url).toBe('https://gitlab.com/my-org/my-project/-/issues/3');
+      expect(issue.created_at).toBeDefined();
+    });
+
+    it('should delete issue', async () => {
+      const result = await server['executeSimpleTool'](
+        server['profile']!.tools.find(t => t.name === 'manage_issues')!,
+        {
+          project_id: 'my-org/my-project',
+          action: 'delete',
+          issue_iid: 1,
+        }
+      );
+
+      // 204 No Content returns empty body
+      expect(result).toBeDefined();
+    });
+  });
+
+  describe('Authorization and Security', () => {
+    it('should reject unauthorized issue delete (403)', async () => {
+      await expect(
+        server['executeSimpleTool'](
+          server['profile']!.tools.find(t => t.name === 'manage_issues')!,
+          {
+            project_id: 'forbidden-project',
+            action: 'delete',
+            issue_iid: 1,
+          }
+        )
+      ).rejects.toThrow();
+    });
+
+    it('should reject unauthorized MR delete (403)', async () => {
+      await expect(
+        server['executeSimpleTool'](
+          server['profile']!.tools.find(t => t.name === 'manage_merge_requests')!,
+          {
+            project_id: 'forbidden-project',
+            action: 'delete',
+            merge_request_iid: 1,
+          }
+        )
+      ).rejects.toThrow();
+    });
+
+    it('should reject invalid issue IID format', async () => {
+      // Mock server will return 400 for invalid IID
+      await expect(
+        server['executeSimpleTool'](
+          server['profile']!.tools.find(t => t.name === 'manage_issues')!,
+          {
+            project_id: 'my-org/my-project',
+            action: 'get',
+            issue_iid: -1, // Invalid: negative
+          }
+        )
+      ).rejects.toThrow();
+    });
+  });
+
   describe('Error Handling', () => {
     it('should throw on missing required parameters', async () => {
       const toolGen = server['toolGenerator'];

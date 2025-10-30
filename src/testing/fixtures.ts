@@ -180,3 +180,43 @@ export const mockMergeRequestsList = [
   },
 ];
 
+export const mockIssue = {
+  id: 1,
+  iid: 1,
+  project_id: 3,
+  title: 'Bug in authentication',
+  description: 'There is a bug in the authentication system',
+  state: 'opened',
+  created_at: '2016-01-11T10:13:33.506Z',
+  updated_at: '2016-01-11T10:14:33.506Z',
+  closed_at: null,
+  closed_by: null,
+  labels: ['bug', 'backend'],
+  milestone: null,
+  assignees: [],
+  author: {
+    id: 1,
+    username: 'john_doe',
+    name: 'John Doe',
+    avatar_url: 'https://www.gravatar.com/avatar/johndoe',
+  },
+  web_url: 'https://gitlab.com/my-org/my-project/-/issues/1',
+  confidential: false,
+  discussion_locked: false,
+};
+
+export const mockIssuesList = [
+  mockIssue,
+  {
+    ...mockIssue,
+    id: 2,
+    iid: 2,
+    title: 'Feature request: Dark mode',
+    description: 'Add dark mode to the application',
+    state: 'opened',
+    labels: ['feature', 'frontend'],
+    created_at: '2017-07-25T10:08:53+02:00',
+    updated_at: '2017-07-26T09:08:53+02:00',
+  },
+];
+

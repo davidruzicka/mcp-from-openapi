@@ -547,6 +547,137 @@ The `validate` command checks:
 - Operations exist in OpenAPI spec (if spec provided)
 - Best practices (tool count, auth configuration)
 
+## Security Best Practices
+
+### Input Validation
+
+Always validate user inputs in your OpenAPI specification to prevent attacks:
+
+#### Text Fields with Length Limits
+```yaml
+# Prevent DoS attacks with oversized strings
+title:
+  type: string
+  minLength: 1
+  maxLength: 255  # GitLab limit for titles
+
+description:
+  type: string
+  maxLength: 1048576  # 1MB, prevents storage bombs
+```
+
+#### Integer Fields with Ranges
+```yaml
+# Prevent integer overflow and invalid IDs
+user_id:
+  type: integer
+  minimum: 1
+  maximum: 2147483647  # INT32_MAX
+
+weight:
+  type: integer
+  minimum: 0
+  maximum: 100  # Reasonable upper bound
+```
+
+### Rate Limiting for Write Operations
+
+Write operations (POST, PUT, DELETE) should have **stricter rate limits** than read operations to prevent abuse:
+
+```json
+{
+  "http_client": {
+    "rate_limit": {
+      "max_requests_per_minute": 600,
+      "overrides": {
+        "postApiV4ProjectsIdIssues": {
+          "max_requests_per_minute": 10
+        },
+        "deleteApiV4ProjectsIdIssuesIssueIid": {
+          "max_requests_per_minute": 5
+        },
+        "postApiV4ProjectsIdMergeRequests": {
+          "max_requests_per_minute": 10
+        },
+        "deleteApiV4ProjectsIdMergeRequestsMergeRequestIid": {
+          "max_requests_per_minute": 5
+        }
+      }
+    }
+  }
+}
+```
+
+**Recommended limits:**
+- **Read operations**: 120-600 req/min (default)
+- **Write operations**: 10-20 req/min
+- **Delete operations**: 5-10 req/min
+- **Batch operations**: 1-5 req/min
+
+Rate limits are enforced **per API token** to prevent spam and abuse.
+
+### XSS Prevention
+
+- Always sanitize HTML content in descriptions
+- Use API's built-in rendering (e.g., GitLab markdown sanitizes by default)
+- **Never render user input as raw HTML**
+- Validate content types before processing
+
+### CSRF Protection
+
+For state-changing operations:
+1. ✅ Use proper HTTP methods (POST/PUT/DELETE, **not GET**)
+2. ✅ Include API tokens in headers (**not query params**)
+3. ✅ Validate Origin/Referer headers in production
+4. ✅ Use HTTP transport's session management
+
+### Project ID Format Validation
+
+GitLab API endpoints have **inconsistent support** for project ID formats:
+
+```json
+{
+  "project_id": {
+    "description": "Project ID (numeric like '123' or URL-encoded path like 'group%2Fproject')",
+    "example": "123"
+  }
+}
+```
+
+**Supported formats by GitLab API:**
+- ✅ **Numeric IDs** (e.g., `123`) - Always supported, most reliable
+- ✅ **URL-encoded paths** (e.g., `group%2Fproject`) - Supported (encode `/` as `%2F`)
+- ❌ **Short names** (e.g., `my-project`) - **NOT supported** (returns 404)
+- ❌ **Plain paths** (e.g., `group/project`) - **NOT supported** (returns 404)
+
+### Authorization Testing
+
+Always test authorization failures in your integration tests:
+
+```typescript
+it('should reject unauthorized delete (403)', async () => {
+  await expect(
+    executeOperation('delete_issue', {
+      project_id: 'forbidden-project',
+      issue_iid: 1,
+    })
+  ).rejects.toThrow(/403|Forbidden/);
+});
+```
+
+### Security Checklist
+
+Before deploying your profile:
+
+- [ ] **Input validation**: All text fields have `maxLength`
+- [ ] **Integer validation**: All ID fields have `minimum`/`maximum`
+- [ ] **Rate limits**: Write operations have strict limits
+- [ ] **Authorization tests**: 403/401 scenarios covered
+- [ ] **URL parsing**: Robust against path traversal
+- [ ] **Error messages**: Don't leak sensitive information
+- [ ] **API tokens**: Stored in environment variables, not code
+- [ ] **HTTPS only**: `base_url` uses `https://`
+
 ## Common Patterns
 
 ### Pattern 1: Resource Manager

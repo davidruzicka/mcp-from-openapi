@@ -3127,25 +3127,34 @@ paths:
                 title:
                   type: string
                   description: The title of the merge request
+                  minLength: 1
+                  maxLength: 255
                   example: "Implement new feature"
                 description:
                   type: string
-                  description: The description of the merge request
+                  description: The description of the merge request (max 1MB)
+                  maxLength: 1048576
                   example: "This implements the new feature requested by the team."
                 assignee_id:
                   type: integer
                   description: The ID of the user to assign the merge request to
+                  minimum: 1
+                  maximum: 2147483647
                   example: 123
                 assignee_ids:
                   type: array
                   items:
                     type: integer
+                    minimum: 1
+                    maximum: 2147483647
                   description: The IDs of the users to assign the merge request to
                   example: [123, 456]
                 reviewer_ids:
                   type: array
                   items:
                     type: integer
+                    minimum: 1
+                    maximum: 2147483647
                   description: The IDs of the users to review the merge request
                   example: [789, 101]
                 labels:
@@ -3155,6 +3164,8 @@ paths:
                 milestone_id:
                   type: integer
                   description: The ID of the milestone to assign the merge request to
+                  minimum: 1
+                  maximum: 2147483647
                   example: 42
                 allow_collaboration:
                   type: boolean
@@ -3282,7 +3293,7 @@ paths:
         - name: id
           in: path
           required: true
-          description: The ID or URL-encoded path of the project
+          description: "The ID of the project (numeric like 123 or URL-encoded path like 'group%2Fproject')"
           schema:
             type: string
         - name: state
@@ -3312,6 +3323,108 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/API_Entities_IssueBasic'
+    post:
+      tags:
+        - issues
+      summary: Create issue
+      description: Create a new issue for a project
+      operationId: postApiV4ProjectsIdIssues
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: "The ID of the project (numeric like 123 or URL-encoded path like 'group%2Fproject')"
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - title
+              properties:
+                title:
+                  type: string
+                  description: The title of the issue
+                  minLength: 1
+                  maxLength: 255
+                  example: "Implement new feature"
+                description:
+                  type: string
+                  description: The description of the issue (max 1MB)
+                  maxLength: 1048576
+                  example: "This implements the new feature requested by the team."
+                assignee_id:
+                  type: integer
+                  description: The ID of the user to assign the issue to
+                  minimum: 1
+                  maximum: 2147483647
+                  example: 123
+                assignee_ids:
+                  type: array
+                  items:
+                    type: integer
+                    minimum: 1
+                    maximum: 2147483647
+                  description: The IDs of the users to assign the issue to
+                  example: [123, 456]
+                milestone_id:
+                  type: integer
+                  description: The ID of the milestone to assign the issue to
+                  minimum: 1
+                  maximum: 2147483647
+                  example: 42
+                labels:
+                  type: string
+                  description: Labels to be added to the issue (comma-separated)
+                  example: "bug,feature,frontend"
+                created_at:
+                  type: string
+                  format: date-time
+                  description: The date the issue was created at (requires admin permissions)
+                  example: "2016-01-11T10:13:33.506Z"
+                due_date:
+                  type: string
+                  format: date
+                  description: The due date of the issue
+                  example: "2016-03-11"
+                confidential:
+                  type: boolean
+                  description: Whether the issue should be confidential
+                  default: false
+                  example: false
+                discussion_locked:
+                  type: boolean
+                  description: Whether the issue discussion is locked
+                  default: false
+                  example: false
+                weight:
+                  type: integer
+                  description: The weight of the issue
+                  minimum: 0
+                  maximum: 100
+                  example: 5
+      responses:
+        '201':
+          description: Issue created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/API_Entities_Issue'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/API_Error'
+        '403':
+          description: Forbidden
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/API_Error'
   /projects/{id}/issues/{issue_iid}:
     get:
       tags:
@@ -3339,6 +3452,40 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/API_Entities_IssueBasic'
+    delete:
+      tags:
+        - issues
+      summary: Delete issue
+      description: Delete an issue (only for administrators and project owners)
+      operationId: deleteApiV4ProjectsIdIssuesIssueIid
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: "The ID of the project (numeric like 123 or URL-encoded path like 'group%2Fproject')"
+          schema:
+            type: string
+        - name: issue_iid
+          in: path
+          required: true
+          description: The internal ID of the issue
+          schema:
+            type: integer
+      responses:
+        '204':
+          description: Issue deleted successfully
+        '403':
+          description: Forbidden - only administrators and project owners can delete issues
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/API_Error'
+        '404':
+          description: Issue not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/API_Error'
 components:
   parameters:
     ProjectIdOrPath:

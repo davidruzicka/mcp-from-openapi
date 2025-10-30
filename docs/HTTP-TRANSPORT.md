@@ -641,6 +641,93 @@ Prometheus metrics planned:
 - `mcp_active_sessions`
 - `mcp_tool_calls_total`
 
+## Rate Limiting
+
+### Global Rate Limit
+
+Default rate limit applies to all API operations:
+
+```bash
+RATE_LIMIT_MAX_REQUESTS=600  # per minute
+RATE_LIMIT_WINDOW_MS=60000   # 60 seconds
+```
+
+**Default**: 600 requests/minute per API token
+
+### Per-Endpoint Rate Limiting
+
+Override rate limits for specific operations in your profile:
+
+```json
+{
+  "http_client": {
+    "rate_limit": {
+      "max_requests_per_minute": 600,
+      "overrides": {
+        "postApiV4ProjectsIdIssues": {
+          "max_requests_per_minute": 10
+        },
+        "deleteApiV4ProjectsIdIssuesIssueIid": {
+          "max_requests_per_minute": 5
+        }
+      }
+    }
+  }
+}
+```
+
+**How it works:**
+- Rate limits are enforced **per API token**
+- Token bucket algorithm allows bursts
+- 429 responses trigger automatic retry with backoff
+
+### Security Recommendations
+
+Different operation types should have different limits:
+
+| Operation Type | Recommended Limit | Reason |
+|---------------|-------------------|---------|
+| **Read** (GET) | 120-600 req/min | Low abuse risk |
+| **Write** (POST, PUT) | 10-20 req/min | Prevent spam |
+| **Delete** | 5-10 req/min | Destructive operations |
+| **Batch** | 1-5 req/min | Resource intensive |
+
+**Why per-endpoint limits:**
+- Prevents spam (e.g., mass issue creation)
+- Protects against DoS attacks
+- Enforces API quotas
+- Allows burst traffic for reads
+
+### Rate Limit Headers
+
+Responses include rate limit information:
+
+```http
+X-RateLimit-Limit: 600
+X-RateLimit-Remaining: 573
+X-RateLimit-Reset: 1634567890
+```
+
+### Handling Rate Limits
+
+When rate limited (429 response):
+
+1. **Automatic retry**: HTTP client retries with exponential backoff
+2. **Backoff schedule**: 1s → 2s → 4s
+3. **Max attempts**: 3 (configurable in profile)
+
+```json
+{
+  "http_client": {
+    "retry": {
+      "max_attempts": 3,
+      "backoff_ms": [1000, 2000, 4000],
+      "retry_on_status": [429, 502, 503, 504]
+    }
+  }
+}
+```
+
 ## Performance
 
 ### Concurrent Clients
