@@ -6,6 +6,7 @@
  */
 
 import type { SchemaInfo, OperationInfo } from './types/openapi.js';
+import { isEmail, isUri } from './validation-utils.js';
 
 export interface ValidationResult {
   valid: boolean;
@@ -136,7 +137,7 @@ export class SchemaValidator {
 
     // String format validation (basic)
     if (schema.type === 'string' && schema.format && typeof data === 'string') {
-      if (schema.format === 'email' && !this.isEmail(data)) {
+      if (schema.format === 'email' && !isEmail(data)) {
         errors.push({
           path: path || '(root)',
           message: 'Invalid email format',
@@ -144,7 +145,7 @@ export class SchemaValidator {
           value: data,
         });
       }
-      if (schema.format === 'uri' && !this.isUri(data)) {
+      if (schema.format === 'uri' && !isUri(data)) {
         errors.push({
           path: path || '(root)',
           message: 'Invalid URI format',
@@ -155,17 +156,5 @@ export class SchemaValidator {
     }
   }
 
-  private isEmail(value: string): boolean {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-  }
-
-  private isUri(value: string): boolean {
-    try {
-      new URL(value);
-      return true;
-    } catch {
-      return false;
-    }
-  }
 }
 

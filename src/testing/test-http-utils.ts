@@ -1,0 +1,131 @@
+/**
+ * Test utilities for HTTP client setup and mocking
+ *
+ * Why: Eliminates code duplication in HTTP client test setup
+ * Provides consistent mocking and client creation patterns
+ */
+
+import { HttpClient, InterceptorChain } from '../interceptors.js';
+import type { InterceptorConfig } from '../types/profile.js';
+
+/**
+ * Create HTTP client with interceptors for testing
+ */
+export function createTestHttpClient(
+  baseUrl: string = 'https://api.example.com',
+  interceptors: InterceptorConfig = {}
+): HttpClient {
+  const interceptorChain = new InterceptorChain(interceptors);
+  return new HttpClient(baseUrl, interceptorChain);
+}
+
+/**
+ * Setup fetch mock that captures request headers
+ */
+export function setupFetchMock(
+  responseBody: any = { ok: true },
+  responseOptions: ResponseInit = { status: 200, headers: { 'Content-Type': 'application/json' } }
+): { capturedHeaders: Record<string, string> } {
+  const capturedHeaders: Record<string, string> = {};
+
+  global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+    // Copy headers to the shared object
+    Object.assign(capturedHeaders, init?.headers as Record<string, string> || {});
+    return new Response(JSON.stringify(responseBody), responseOptions);
+  };
+
+  return { capturedHeaders };
+}
+
+/**
+ * Setup fetch mock that returns error response
+ */
+export function setupErrorFetchMock(status: number = 500, message: string = 'Internal Server Error'): void {
+  global.fetch = async () => new Response(JSON.stringify({ message }), {
+    status,
+    headers: { 'Content-Type': 'application/json' }
+  });
+}
+
+/**
+ * Setup fetch mock for network errors
+ */
+export function setupNetworkErrorFetchMock(): void {
+  global.fetch = async () => {
+    throw new Error('Network error');
+  };
+}
+
+/**
+ * Setup fetch mock for rate limiting
+ */
+export function setupRateLimitFetchMock(): void {
+  global.fetch = async () => new Response(null, {
+    status: 429,
+    headers: { 'Retry-After': '60' }
+  });
+}
+
+/**
+ * Restore original fetch
+ */
+export function restoreFetch(): void {
+  delete (global as any).fetch;
+}
+
+/**
+ * Test helper for HTTP client tests
+ */
+export class HttpTestHelper {
+  private capturedHeaders: Record<string, string> = {};
+
+  constructor(
+    private baseUrl: string = 'https://api.example.com',
+    private interceptors: InterceptorConfig = {}
+  ) {
+    this.setupMock();
+  }
+
+  private setupMock(): void {
+    global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+      this.capturedHeaders = init?.headers as Record<string, string>;
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    };
+  }
+
+  getClient(): HttpClient {
+    return createTestHttpClient(this.baseUrl, this.interceptors);
+  }
+
+  getCapturedHeaders(): Record<string, string> {
+    return { ...this.capturedHeaders };
+  }
+
+  setResponse(responseBody: any, options?: ResponseInit): void {
+    global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+      Object.assign(this.capturedHeaders, init?.headers as Record<string, string> || {});
+      return new Response(JSON.stringify(responseBody), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+        ...options
+      });
+    };
+  }
+
+  setErrorResponse(status: number, message: string): void {
+    global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+      Object.assign(this.capturedHeaders, init?.headers as Record<string, string> || {});
+      return new Response(JSON.stringify({ message }), {
+        status,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    };
+  }
+
+  cleanup(): void {
+    restoreFetch();
+  }
+}

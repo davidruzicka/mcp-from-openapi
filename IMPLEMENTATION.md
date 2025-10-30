@@ -200,20 +200,30 @@ src/
 │   ├── openapi.ts       - Simplified OpenAPI types
 │   └── http-transport.ts - HTTP transport types
 ├── openapi-parser.ts    - OpenAPI spec parser & indexer
-├── profile-loader.ts    - Profile JSON loader & validator
+├── profile-loader.ts    - Profile JSON loader & validator (operation keys validation)
 ├── tool-generator.ts    - MCP tool generator
 ├── interceptors.ts      - HTTP interceptor chain
 ├── composite-executor.ts - Multi-step API call executor
 ├── schema-validator.ts  - Request body validation
 ├── http-transport.ts    - HTTP Streamable transport (787 lines)
+├── http-client-factory.ts - HTTP client management & session handling
+├── jsonrpc-validator.ts - JSON-RPC message validation utilities
+├── validation-utils.ts  - Common validation functions (email, URI)
 ├── metrics.ts           - Prometheus metrics collector (264 lines)
 ├── logger.ts            - Pluggable logger (console/JSON)
 ├── constants.ts         - Time & HTTP status constants
 ├── mcp-server.ts        - Main MCP server
 ├── index.ts             - CLI entry point
-└── *.test.ts            - Test suites (144 tests)
+├── testing/
+│   ├── fixtures.ts      - Test data fixtures
+│   ├── mock-utils.ts    - Mock server URL parsing utilities
+│   ├── test-http-utils.ts - HTTP client test utilities
+│   ├── mock-gitlab-server.ts - MSW mock server for GitLab API
+│   ├── test-types.ts    - Test-specific types
+│   └── *.test.ts        - Test suites (261 tests)
+└── *.test.ts            - Additional test suites
 
-profiles/examples/gitlab/
+profiles/gitlab/
 ├── openapi.yaml         - GitLab OpenAPI spec
 └── developer-profile.json - Example profile
 
@@ -226,11 +236,11 @@ docs/
 └── PROFILE-GUIDE.md     - Profile creation guide (622 lines)
 ```
 
-## Test Coverage (152 tests, 100% passing)
+## Test Coverage (261 tests, 100% passing)
 
-✅ **Unit Tests** (103 tests):
+✅ **Unit Tests** (123 tests):
 - **OpenAPI Parser** (8 tests) - spec parsing, $ref resolution
-- **Profile Loader** (4 tests) - validation, logic checks
+- **Profile Loader** (9 tests) - validation, logic checks, operation keys validation
 - **Tool Generator** (7 tests) - MCP tool generation, JSON schema
 - **Interceptors** (10 tests) - auth, rate-limit, retry, array serialization
 - **Composite Executor** (6 tests) - multi-step execution, partial results
@@ -238,6 +248,9 @@ docs/
 - **Logger** (17 tests) - console/JSON output, log levels, **profile-aware token redaction** (bearer/query/custom-header)
 - **HTTP Transport** (35 tests) - POST/GET/DELETE, sessions, SSE, origin validation, CIDR
 - **Metrics** (16 tests) - HTTP, sessions, tools, API calls
+- **HTTP Client Factory** (13 tests) - client creation, session management
+- **JSON-RPC Validator** (5 tests) - message type validation
+- **Validation Utils** (2 tests) - email and URI validation
 
 ✅ **Integration Tests** (30 tests):
 - **GitLab API** (21 tests) - badges, branches, access requests, jobs
@@ -246,6 +259,10 @@ docs/
 ✅ **Validation Tests** (19 tests):
 - **Profile Schema** (10 tests) - JSON Schema validation, compilation
 - **Validation CLI** (9 tests) - profile validation script
+
+✅ **Test Utilities** (19 tests):
+- **Mock Utils** (12 tests) - URL parsing, pagination utilities
+- **Test HTTP Utils** (7 tests) - HTTP client test setup, mocking
 
 ## Performance Characteristics
 

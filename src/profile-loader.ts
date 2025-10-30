@@ -106,11 +106,121 @@ export class ProfileLoader {
         }
       }
 
+      // Validate operation keys match action enum or follow {action}_{resourceType} pattern
+      if (tool.operations && tool.parameters['action']?.enum) {
+        const actionEnum = tool.parameters['action'].enum;
+        const resourceTypeParam = tool.parameters['resource_type'];
+        const resourceTypeEnum = resourceTypeParam?.enum;
+
+        for (const operationKey of Object.keys(tool.operations)) {
+          // Check if operation key is directly in action enum
+          if (actionEnum.includes(operationKey)) {
+            continue;
+          }
+
+          // Check if operation key follows {action}_{resourceType} pattern
+          const parts = operationKey.split('_');
+          if (parts.length === 2) {
+            const [actionPart, resourceTypePart] = parts;
+
+            // Both parts must be valid
+            const actionValid = actionEnum.includes(actionPart);
+            const resourceTypeValid = resourceTypeEnum ? resourceTypeEnum.includes(resourceTypePart) : true;
+
+            if (actionValid && resourceTypeValid) {
+              continue;
+            }
+          }
+
+          // Generate helpful error message with suggestions
+          const suggestions = this.generateOperationKeySuggestions(operationKey, actionEnum, resourceTypeEnum);
+          const suggestionText = suggestions.length > 0
+            ? ` Did you mean one of: ${suggestions.join(', ')}?`
+            : '';
+
+          throw new ValidationError(
+            `Invalid operation key '${operationKey}' in tool '${tool.name}'. ` +
+            `Must be an action from enum [${actionEnum.join(', ')}] or follow pattern {action}_{resourceType}.${suggestionText}`,
+            {
+              toolName: tool.name,
+              operationKey,
+              availableActions: actionEnum,
+              availableResourceTypes: resourceTypeEnum,
+              suggestions
+            }
+          );
+        }
+      }
+
       // Validate composite steps DAG (no circular dependencies)
       if (tool.composite && tool.steps) {
         this.validateCompositeStepsDAG(tool.name, tool.steps);
       }
     }
+  }
+
+  /**
+   * Generate helpful suggestions for invalid operation keys
+   */
+  private generateOperationKeySuggestions(
+    invalidKey: string,
+    actionEnum: string[],
+    resourceTypeEnum?: string[]
+  ): string[] {
+    const suggestions: string[] = [];
+
+    // Direct action matches (case-insensitive)
+    for (const action of actionEnum) {
+      if (action.toLowerCase() === invalidKey.toLowerCase()) {
+        suggestions.push(action);
+      }
+    }
+
+    // Levenshtein distance suggestions for actions
+    const maxDistance = Math.min(2, invalidKey.length - 1);
+    for (const action of actionEnum) {
+      if (this.levenshteinDistance(invalidKey, action) <= maxDistance) {
+        suggestions.push(action);
+      }
+    }
+
+    // Check for {action}_{resourceType} patterns
+    if (resourceTypeEnum) {
+      for (const action of actionEnum) {
+        for (const resourceType of resourceTypeEnum) {
+          const compositeKey = `${action}_${resourceType}`;
+          if (this.levenshteinDistance(invalidKey, compositeKey) <= maxDistance) {
+            suggestions.push(compositeKey);
+          }
+        }
+      }
+    }
+
+    // Remove duplicates and return unique suggestions
+    return [...new Set(suggestions)];
+  }
+
+  /**
+   * Calculate Levenshtein distance between two strings
+   */
+  private levenshteinDistance(a: string, b: string): number {
+    const matrix = Array(b.length + 1).fill(null).map(() => Array(a.length + 1).fill(null));
+
+    for (let i = 0; i <= a.length; i++) matrix[0][i] = i;
+    for (let j = 0; j <= b.length; j++) matrix[j][0] = j;
+
+    for (let j = 1; j <= b.length; j++) {
+      for (let i = 1; i <= a.length; i++) {
+        const indicator = a[i - 1] === b[j - 1] ? 0 : 1;
+        matrix[j][i] = Math.min(
+          matrix[j][i - 1] + 1,     // deletion
+          matrix[j - 1][i] + 1,     // insertion
+          matrix[j - 1][i - 1] + indicator // substitution
+        );
+      }
+    }
+
+    return matrix[b.length][a.length];
   }
 
   /**

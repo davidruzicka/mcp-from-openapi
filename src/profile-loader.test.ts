@@ -216,5 +216,179 @@ describe('ProfileLoader', () => {
     expect(profile.profile_name).toBe('my-api');
     expect(profile.tools).toEqual([]);
   });
+
+  describe('Operation keys validation', () => {
+    it('should accept direct action enum values', async () => {
+      const loader = new ProfileLoader();
+
+      const validProfileJson = JSON.stringify({
+        profile_name: 'test',
+        base_url: 'https://api.example.com',
+        tools: [{
+          name: 'test_tool',
+          description: 'Test tool',
+          operations: {
+            'list': 'getTest',
+            'get': 'getTestId',
+            'create': 'postTest'
+          },
+          parameters: {
+            action: {
+              type: 'string',
+              enum: ['list', 'get', 'create'],
+              description: 'Action',
+              required: true
+            }
+          }
+        }]
+      });
+
+      const fs = await import('fs/promises');
+      const tmpPath = '/tmp/valid-ops-profile.json';
+      await fs.writeFile(tmpPath, validProfileJson);
+
+      const profile = await loader.load(tmpPath);
+      expect(profile.tools[0].operations).toHaveProperty('list');
+      expect(profile.tools[0].operations).toHaveProperty('get');
+      expect(profile.tools[0].operations).toHaveProperty('create');
+    });
+
+    it('should accept {action}_{resourceType} composite keys', async () => {
+      const loader = new ProfileLoader();
+
+      const validProfileJson = JSON.stringify({
+        profile_name: 'test',
+        base_url: 'https://api.example.com',
+        tools: [{
+          name: 'test_tool',
+          description: 'Test tool',
+          operations: {
+            'list_project': 'getProjects',
+            'list_group': 'getGroups',
+            'get_project': 'getProjectId'
+          },
+          parameters: {
+            action: {
+              type: 'string',
+              enum: ['list', 'get'],
+              description: 'Action',
+              required: true
+            },
+            resource_type: {
+              type: 'string',
+              enum: ['project', 'group'],
+              description: 'Resource type',
+              required: true
+            }
+          }
+        }]
+      });
+
+      const fs = await import('fs/promises');
+      const tmpPath = '/tmp/valid-composite-ops-profile.json';
+      await fs.writeFile(tmpPath, validProfileJson);
+
+      const profile = await loader.load(tmpPath);
+      expect(profile.tools[0].operations).toHaveProperty('list_project');
+      expect(profile.tools[0].operations).toHaveProperty('list_group');
+      expect(profile.tools[0].operations).toHaveProperty('get_project');
+    });
+
+    it('should reject unknown operation key', async () => {
+      const loader = new ProfileLoader();
+
+      const invalidProfileJson = JSON.stringify({
+        profile_name: 'test',
+        base_url: 'https://api.example.com',
+        tools: [{
+          name: 'test_tool',
+          description: 'Test tool',
+          operations: {
+            'invalid_action': 'getTest' // 'invalid_action' not in action enum
+          },
+          parameters: {
+            action: {
+              type: 'string',
+              enum: ['list', 'get', 'create'],
+              description: 'Action',
+              required: true
+            }
+          }
+        }]
+      });
+
+      const fs = await import('fs/promises');
+      const tmpPath = '/tmp/invalid-ops-profile.json';
+      await fs.writeFile(tmpPath, invalidProfileJson);
+
+      await expect(loader.load(tmpPath)).rejects.toThrow('Invalid operation key \'invalid_action\'');
+    });
+
+    it('should reject invalid composite key format', async () => {
+      const loader = new ProfileLoader();
+
+      const invalidProfileJson = JSON.stringify({
+        profile_name: 'test',
+        base_url: 'https://api.example.com',
+        tools: [{
+          name: 'test_tool',
+          description: 'Test tool',
+          operations: {
+            'list_invalid_resource': 'getTest' // 'invalid_resource' not in resource_type enum
+          },
+          parameters: {
+            action: {
+              type: 'string',
+              enum: ['list', 'get'],
+              description: 'Action',
+              required: true
+            },
+            resource_type: {
+              type: 'string',
+              enum: ['project', 'group'],
+              description: 'Resource type',
+              required: true
+            }
+          }
+        }]
+      });
+
+      const fs = await import('fs/promises');
+      const tmpPath = '/tmp/invalid-composite-ops-profile.json';
+      await fs.writeFile(tmpPath, invalidProfileJson);
+
+      await expect(loader.load(tmpPath)).rejects.toThrow('Invalid operation key \'list_invalid_resource\'');
+    });
+
+    it('should provide helpful suggestions for typos', async () => {
+      const loader = new ProfileLoader();
+
+      const typoProfileJson = JSON.stringify({
+        profile_name: 'test',
+        base_url: 'https://api.example.com',
+        tools: [{
+          name: 'test_tool',
+          description: 'Test tool',
+          operations: {
+            'creat': 'postTest' // typo: 'creat' instead of 'create'
+          },
+          parameters: {
+            action: {
+              type: 'string',
+              enum: ['list', 'get', 'create'],
+              description: 'Action',
+              required: true
+            }
+          }
+        }]
+      });
+
+      const fs = await import('fs/promises');
+      const tmpPath = '/tmp/typo-ops-profile.json';
+      await fs.writeFile(tmpPath, typoProfileJson);
+
+      await expect(loader.load(tmpPath)).rejects.toThrow('Did you mean one of: create?');
+    });
+  });
 });
 

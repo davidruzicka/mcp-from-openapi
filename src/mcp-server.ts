@@ -18,23 +18,24 @@ import { ToolGenerator } from './tool-generator.js';
 import { CompositeExecutor } from './composite-executor.js';
 import { ConfigurationError, OperationNotFoundError, ValidationError, AuthenticationError } from './errors.js';
 import { InterceptorChain, HttpClient } from './interceptors.js';
+import { HttpClientFactory } from './http-client-factory.js';
 import { SchemaValidator } from './schema-validator.js';
 import type { Profile, ToolDefinition, AuthInterceptor } from './types/profile.js';
 import type { Logger } from './logger.js';
 import { ConsoleLogger, JsonLogger } from './logger.js';
 import type { OperationInfo } from './types/openapi.js';
+import { isInitializeRequest, isToolCallRequest } from './jsonrpc-validator.js';
 
 export class MCPServer {
   private server: Server;
   private parser: OpenAPIParser;
   private profile?: Profile;
   private toolGenerator: ToolGenerator;
-  private httpClient?: HttpClient;
+  private httpClientFactory = new HttpClientFactory();
   private compositeExecutor?: CompositeExecutor;
   private schemaValidator: SchemaValidator;
   private logger: Logger;
   private httpTransport: any = null;
-  private sessionHttpClients: Map<string, HttpClient> = new Map();
 
   /**
    * Filter response object to include only specified fields
@@ -107,22 +108,19 @@ export class MCPServer {
     // For stdio transport, create client with env token
     // For HTTP transport, clients are created per-session with user's token
     const baseUrl = this.getBaseUrl();
-    if (this.profile.interceptors?.auth) {
-      const envToken = process.env[this.profile.interceptors.auth.value_from_env];
-      if (envToken) {
-        // Token available in env - create global client (stdio transport)
-        const interceptors = new InterceptorChain(this.profile.interceptors);
-        this.httpClient = new HttpClient(baseUrl, interceptors);
-        this.compositeExecutor = new CompositeExecutor(this.parser, this.httpClient);
-      } else {
-        // No env token - will use per-session clients (HTTP transport)
-        this.compositeExecutor = new CompositeExecutor(this.parser);
-      }
+    const hasAuth = !!this.profile.interceptors?.auth;
+    const envToken = hasAuth ? process.env[this.profile.interceptors.auth.value_from_env] : undefined;
+
+    if (hasAuth && envToken) {
+      // Token available in env - create global client (stdio transport)
+      const httpClient = this.httpClientFactory.createGlobalClient({
+        profile: this.profile,
+        baseUrl,
+      });
+      this.compositeExecutor = new CompositeExecutor(this.parser, httpClient);
     } else {
-      // No auth configured
-      const interceptors = new InterceptorChain(this.profile.interceptors || {});
-      this.httpClient = new HttpClient(baseUrl, interceptors);
-      this.compositeExecutor = new CompositeExecutor(this.parser, this.httpClient);
+      // No env token or no auth - will use per-session clients (HTTP transport)
+      this.compositeExecutor = new CompositeExecutor(this.parser);
     }
     
     this.logger.info('MCP server initialized', {
@@ -168,13 +166,13 @@ export class MCPServer {
   private getHttpClientForSession(sessionId?: string): HttpClient {
     if (!sessionId) {
       // Fallback to global client for stdio transport
-      if (!this.httpClient) {
+      if (!this.httpClientFactory.hasGlobalClient()) {
         const hasHttpTransport = !!this.httpTransport;
         const transport = hasHttpTransport ? 'http' : 'stdio';
         const authConfig = this.profile?.interceptors?.auth;
         const envVarName = authConfig?.value_from_env || 'API_TOKEN';
         const hasEnvToken = !!process.env[envVarName];
-        
+
         throw new ConfigurationError(
           `HTTP client not initialized. ` +
           `Transport: ${transport}, ` +
@@ -185,52 +183,23 @@ export class MCPServer {
           { transport, hasEnvToken, envVarName, hasHttpTransport }
         );
       }
-      return this.httpClient;
+      return this.httpClientFactory.getGlobalClient();
     }
 
-    // Check cache first
-    let client = this.sessionHttpClients.get(sessionId);
-    if (client) {
-      return client;
-    }
-
-    // Get auth token from session or env
-    const authToken = this.getAuthTokenFromSession(sessionId);
-    const envToken = this.profile?.interceptors?.auth 
-      ? process.env[this.profile.interceptors.auth.value_from_env]
-      : undefined;
-    
-    if (!authToken && !envToken) {
-      const authConfig = this.profile?.interceptors?.auth;
-      const expectedEnvVar = authConfig?.value_from_env || 'API_TOKEN';
-      throw new AuthenticationError(
-        `No auth token found for session ${sessionId}. ` +
-        `Expected token in Authorization/X-API-Token header or ${expectedEnvVar} env var`,
-        { sessionId, expectedEnvVar, hasProfile: !!this.profile }
-      );
-    }
-
-    // Create new client with session-specific interceptor
+    // Validate profile exists
     if (!this.profile) {
       throw new ConfigurationError('Profile not initialized. Call initialize() first.');
     }
-    
-    const baseUrl = this.getBaseUrl();
-    const tokenToUse = authToken || envToken;
-    const interceptors = new InterceptorChain(this.profile.interceptors || {}, tokenToUse);
-    const newClient = new HttpClient(baseUrl, interceptors);
 
-    // Double-check: Another concurrent request might have created client
-    // Race condition prevention: Use first client that was set
-    const existingClient = this.sessionHttpClients.get(sessionId);
-    if (existingClient) {
-      // Another request won the race, use its client
-      return existingClient;
-    }
+    // Get auth token from session
+    const authToken = this.getAuthTokenFromSession(sessionId);
 
-    // We won the race, cache our client
-    this.sessionHttpClients.set(sessionId, newClient);
-    return newClient;
+    // Create or get session client using factory
+    return this.httpClientFactory.getOrCreateSessionClient(sessionId, {
+      profile: this.profile,
+      baseUrl: this.getBaseUrl(),
+      sessionToken: authToken,
+    });
   }
 
   /**
@@ -247,11 +216,11 @@ export class MCPServer {
 
   /**
    * Cleanup HTTP client for destroyed session
-   * 
+   *
    * Why: Prevent memory leak - sessions expire but cached clients stay forever
    */
   private cleanupSessionClient(sessionId: string): void {
-    const removed = this.sessionHttpClients.delete(sessionId);
+    const removed = this.httpClientFactory.cleanupSessionClient(sessionId);
     if (removed) {
       this.logger.info('Cleaned up session HTTP client', { sessionId });
     }
@@ -565,17 +534,6 @@ export class MCPServer {
     return this.handleOtherRequest(message);
   }
 
-  private isInitializeRequest(message: unknown): boolean {
-    if (typeof message !== 'object' || message === null) return false;
-    const req = message as Record<string, unknown>;
-    return req.method === 'initialize';
-  }
-
-  private isToolCallRequest(message: unknown): boolean {
-    if (typeof message !== 'object' || message === null) return false;
-    const req = message as Record<string, unknown>;
-    return req.method === 'tools/call';
-  }
 
   private handleInitialize(message: unknown, sessionId?: string): unknown {
     const req = message as Record<string, unknown>;

@@ -19,6 +19,7 @@ import type {
   HttpTransportConfig,
   McpRequest
 } from './types/http-transport.js';
+import { isInitializeRequest } from './jsonrpc-validator.js';
 import { MetricsCollector } from './metrics.js';
 
 export class HttpTransport {
@@ -381,7 +382,7 @@ export class HttpTransport {
       }
 
       // Check if this is initialization (no session ID yet)
-      const isInitialization = this.isInitializeRequest(body);
+      const isInitialization = isInitializeRequest(body);
 
       // Validate session (except for initialization)
       if (!isInitialization && sessionId) {
@@ -683,14 +684,6 @@ export class HttpTransport {
     }
   }
 
-  /**
-   * Check if request is initialization
-   */
-  private isInitializeRequest(body: unknown): boolean {
-    if (typeof body !== 'object' || body === null) return false;
-    const req = body as Record<string, unknown>;
-    return req.method === 'initialize';
-  }
 
   /**
    * Determine message type (request, notification, response)

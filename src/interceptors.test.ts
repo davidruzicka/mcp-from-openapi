@@ -6,6 +6,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { HttpClient, InterceptorChain } from './interceptors.js';
+import { createTestHttpClient, setupFetchMock, setupErrorFetchMock, setupNetworkErrorFetchMock, setupRateLimitFetchMock } from './testing/test-http-utils.js';
 import type { InterceptorConfig } from './types/profile.js';
 
 describe('HttpClient - Auth Interceptors', () => {
@@ -29,18 +30,8 @@ describe('HttpClient - Auth Interceptors', () => {
       },
     };
 
-    const interceptors = new InterceptorChain(config);
-    const client = new HttpClient('https://api.example.com', interceptors);
-
-    // Mock fetch to capture request
-    let capturedHeaders: Record<string, string> = {};
-    global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
-      capturedHeaders = init?.headers as Record<string, string>;
-      return new Response(JSON.stringify({ ok: true }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    };
+    const client = createTestHttpClient('https://api.example.com', config);
+    const { capturedHeaders } = setupFetchMock();
 
     await client.request('GET', '/test');
 
@@ -121,17 +112,8 @@ describe('HttpClient - Auth Interceptors', () => {
   it('should work without auth if not configured', async () => {
     const config: InterceptorConfig = {};
 
-    const interceptors = new InterceptorChain(config);
-    const client = new HttpClient('https://api.example.com', interceptors);
-
-    let capturedHeaders: Record<string, string> = {};
-    global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
-      capturedHeaders = init?.headers as Record<string, string>;
-      return new Response(JSON.stringify({ ok: true }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    };
+    const client = createTestHttpClient('https://api.example.com', config);
+    const { capturedHeaders } = setupFetchMock();
 
     await client.request('GET', '/test');
 
@@ -433,10 +415,9 @@ describe('HttpClient - Retry Logic', () => {
       },
     };
 
-    const interceptors = new InterceptorChain(config);
-    const client = new HttpClient('https://api.example.com', interceptors);
+    const client = createTestHttpClient('https://api.example.com', config);
 
-    global.fetch = async () => new Response(null, { status: 502 });
+    setupErrorFetchMock(502);
 
     await expect(
       client.request('GET', '/test')

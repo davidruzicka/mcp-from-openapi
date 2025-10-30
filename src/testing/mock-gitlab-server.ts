@@ -8,6 +8,13 @@
 import { http, HttpResponse } from 'msw';
 import { setupServer } from 'msw/node';
 import * as fixtures from './fixtures.js';
+import {
+  parsePaginationParams,
+  parseSearchParam,
+  parseBranchParams,
+  parseScopeParam,
+  applyPagination
+} from './mock-utils.js';
 
 const BASE_URL = 'https://gitlab.com/api/v4';
 
@@ -43,10 +50,8 @@ function extractIidFromUrl(url: string): number | null {
 export const handlers = [
   // Project Badges
   http.get(`${BASE_URL}/projects/*/badges`, ({ request, params }) => {
-    const url = new URL(request.url);
-    const page = parseInt(url.searchParams.get('page') || '1', 10);
-    const perPage = parseInt(url.searchParams.get('per_page') || '20', 10);
-    
+    const { page } = parsePaginationParams(request);
+
     // Simple pagination
     if (page === 1) {
       return HttpResponse.json(fixtures.mockBadgesList);
@@ -130,9 +135,8 @@ export const handlers = [
 
   // Branches
   http.get(`${BASE_URL}/projects/*/repository/branches`, ({ request }) => {
-    const url = new URL(request.url);
-    const search = url.searchParams.get('search');
-    
+    const search = parseSearchParam(request);
+
     if (search) {
       return HttpResponse.json(
         fixtures.mockBranchesList.filter(b => b.name.includes(search))
@@ -152,9 +156,7 @@ export const handlers = [
   }),
 
   http.post(`${BASE_URL}/projects/*/repository/branches`, async ({ request }) => {
-    const url = new URL(request.url);
-    const branch = url.searchParams.get('branch');
-    const ref = url.searchParams.get('ref');
+    const { branch, ref } = parseBranchParams(request);
 
     if (!branch || !ref) {
       return HttpResponse.json(
@@ -234,9 +236,7 @@ export const handlers = [
 
   // Jobs
   http.get(`${BASE_URL}/projects/*/jobs`, ({ request }) => {
-    const url = new URL(request.url);
-    // Why getAll: GitLab sends array params as scope[]=failed&scope[]=canceled
-    const scope = url.searchParams.getAll('scope[]');
+    const scope = parseScopeParam(request);
 
     if (scope.length > 0 && scope.includes('failed')) {
       return HttpResponse.json(fixtures.mockJobsList.filter(j => j.status === 'failed'));
@@ -275,8 +275,7 @@ export const handlers = [
 
   // Merge Requests
   http.get(`${BASE_URL}/projects/*/merge_requests`, ({ request, params }) => {
-    const url = new URL(request.url);
-    const page = parseInt(url.searchParams.get('page') || '1', 10);
+    const { page } = parsePaginationParams(request);
 
     // Simple pagination
     if (page === 1) {
@@ -342,8 +341,7 @@ export const handlers = [
 
   // Issues
   http.get(`${BASE_URL}/projects/*/issues`, ({ request }) => {
-    const url = new URL(request.url);
-    const page = parseInt(url.searchParams.get('page') || '1', 10);
+    const { page } = parsePaginationParams(request);
 
     // Simple pagination
     if (page === 1) {

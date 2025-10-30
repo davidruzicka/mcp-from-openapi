@@ -735,6 +735,8 @@ Handle multiple resource types with one tool:
 }
 ```
 
+**Note**: Operation keys must either be direct action names (from the `action` enum) or follow the `{action}_{resource_type}` pattern where both parts are valid enum values. Invalid keys are caught at profile load time with helpful error messages and suggestions.
+
 ### Pattern 3: Read-Only List with Filters
 
 Provide filterable list endpoint:
