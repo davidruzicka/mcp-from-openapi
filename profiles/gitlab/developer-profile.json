@@ -250,7 +250,7 @@
         },
         "per_page": {
           "type": "integer",
-          "description": "Items per page (max 100)",
+          "description": "Items per page (recommended max 100)",
           "default": 20
         }
       }
@@ -353,7 +353,7 @@
         },
         "per_page": {
           "type": "integer",
-          "description": "Items per page (max 100)",
+          "description": "Items per page (recommended max 100)",
           "default": 20
         }
       }
@@ -409,7 +409,7 @@
         },
         "per_page": {
           "type": "integer",
-          "description": "Items per page (max 100)",
+          "description": "Items per page (recommended max 100)",
           "default": 20
         }
       }

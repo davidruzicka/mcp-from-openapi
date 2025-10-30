@@ -189,7 +189,7 @@ curl -X POST http://localhost:3003/mcp \
       "name": "manage_project_badges",
       "arguments": {
         "action": "list",
-        "project_id": "my-org/my-project"
+        "project_id": "123"
       }
     }
   }'

@@ -63,7 +63,7 @@ Manage badges for a project (list, get, create, update, delete).
 Example:
 ```json
 {
-  "project_id": "my-org/my-project",
+  "project_id": "123",
   "action": "list"
 }
 ```
@@ -75,7 +75,7 @@ Manage repository branches (list, get, create, delete, protect, unprotect, exist
 Example:
 ```json
 {
-  "project_id": "my-org/my-project",
+  "project_id": "123",
   "action": "create",
   "branch": "feature/new-feature",
   "ref": "main"
@@ -102,7 +102,7 @@ List CI/CD jobs for a project with optional status filtering.
 Example:
 ```json
 {
-  "project_id": "my-org/my-project",
+  "project_id": "123",
   "scope": ["failed", "canceled"]
 }
 ```
@@ -114,7 +114,7 @@ Manage a specific CI/CD job (get details, play manual job).
 Example:
 ```json
 {
-  "project_id": "my-org/my-project",
+  "project_id": "123",
   "action": "get",
   "job_id": 1234
 }
@@ -196,7 +196,7 @@ For self-hosted GitLab:
 {
   "tool": "list_project_jobs",
   "arguments": {
-    "project_id": "my-org/my-project",
+    "project_id": "123",
     "scope": ["failed"]
   }
 }
@@ -208,7 +208,7 @@ For self-hosted GitLab:
 {
   "tool": "manage_branches",
   "arguments": {
-    "project_id": "my-org/my-project",
+    "project_id": "123",
     "action": "create",
     "branch": "feature/implement-x",
     "ref": "main"

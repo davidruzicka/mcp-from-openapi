@@ -82,7 +82,7 @@ For complete GitLab API examples, see [EXAMPLE-GITLAB.md](./EXAMPLE-GITLAB.md).
 {
   "name": "manage_project_badges",
   "arguments": {
-    "project_id": "my-org/my-project",
+    "project_id": "123",
     "action": "create",
     "link_url": "https://example.com/coverage",
     "image_url": "https://shields.io/badge/coverage-95%25-green",
@@ -97,7 +97,7 @@ For complete GitLab API examples, see [EXAMPLE-GITLAB.md](./EXAMPLE-GITLAB.md).
 {
   "name": "manage_branches",
   "arguments": {
-    "project_id": "my-org/my-project",
+    "project_id": "123",
     "action": "list",
     "search": "feature/",
     "sort": "updated_desc"
@@ -111,7 +111,7 @@ For complete GitLab API examples, see [EXAMPLE-GITLAB.md](./EXAMPLE-GITLAB.md).
 {
   "name": "manage_branches",
   "arguments": {
-    "project_id": "my-org/my-project",
+    "project_id": "123",
     "action": "create",
     "branch": "feature/new-feature",
     "ref": "main"
@@ -125,7 +125,7 @@ For complete GitLab API examples, see [EXAMPLE-GITLAB.md](./EXAMPLE-GITLAB.md).
 {
   "name": "manage_branches",
   "arguments": {
-    "project_id": "my-org/my-project",
+    "project_id": "123",
     "action": "protect",
     "branch": "main",
     "developers_can_push": false,
@@ -141,7 +141,7 @@ For complete GitLab API examples, see [EXAMPLE-GITLAB.md](./EXAMPLE-GITLAB.md).
   "name": "manage_access_requests",
   "arguments": {
     "resource_type": "project",
-    "resource_id": "my-org/my-project",
+    "resource_id": "123",
     "action": "list"
   }
 }
@@ -154,7 +154,7 @@ For complete GitLab API examples, see [EXAMPLE-GITLAB.md](./EXAMPLE-GITLAB.md).
   "name": "manage_access_requests",
   "arguments": {
     "resource_type": "project",
-    "resource_id": "my-org/my-project",
+    "resource_id": "123",
     "action": "approve",
     "user_id": 123,
     "access_level": 30
@@ -175,7 +175,7 @@ Access levels:
 {
   "name": "list_project_jobs",
   "arguments": {
-    "project_id": "my-org/my-project",
+    "project_id": "123",
     "scope": ["failed", "canceled"]
   }
 }
@@ -187,7 +187,7 @@ Access levels:
 {
   "name": "manage_job",
   "arguments": {
-    "project_id": "my-org/my-project",
+    "project_id": "123",
     "action": "get",
     "job_id": 12345
   }
@@ -200,7 +200,7 @@ Access levels:
 {
   "name": "manage_job",
   "arguments": {
-    "project_id": "my-org/my-project",
+    "project_id": "123",
     "action": "play",
     "job_id": 12345
   }
