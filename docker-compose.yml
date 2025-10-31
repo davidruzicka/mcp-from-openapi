@@ -5,8 +5,8 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: mcp-from-openapi:latest
-    container_name: mcp-from-openapi
+    image: mcp4openapi:latest
+    container_name: mcp4openapi
     ports:
       - "3003:3003"
     volumes:

@@ -79,7 +79,7 @@ Prevent multiple identical in-flight requests (thundering herd):
 **Estimated effort**: 2-3 hours
 
 ### 5. Auto-generate Profile from OpenAPI
-Command: `mcp-from-openapi generate-profile --spec=api.yaml --output=profile.json`
+Command: `mcp4openapi generate-profile --spec=api.yaml --output=profile.json`
 - Group operations by tag
 - Infer common CRUD patterns
 - Generate reasonable tool names and descriptions

@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://github.com/davidruzicka/mcp-from-openapi/profile-schema.json",
+  "$id": "https://github.com/davidruzicka/mcp4openapi/profile-schema.json",
   "title": "MCP Profile",
   "description": "Configuration schema for MCP from OpenAPI tool profiles",
   "type": "object",

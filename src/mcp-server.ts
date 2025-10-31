@@ -64,7 +64,7 @@ export class MCPServer {
     this.schemaValidator = new SchemaValidator();
     this.server = new Server(
       {
-        name: 'mcp-from-openapi',
+        name: 'mcp4openapi',
         version: '0.1.0',
       },
       {
@@ -542,7 +542,7 @@ export class MCPServer {
     const result: any = {
       protocolVersion: '2025-03-26',
       serverInfo: {
-        name: 'mcp-from-openapi',
+        name: 'mcp4openapi',
         version: '0.1.0',
       },
       capabilities: {

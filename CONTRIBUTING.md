@@ -1,4 +1,4 @@
-# Contributing to mcp-from-openapi
+# Contributing to mcp4openapi
 
 Thank you for considering contributing! This document provides guidelines for developers working on the codebase.
 
@@ -6,8 +6,8 @@ Thank you for considering contributing! This document provides guidelines for de
 
 1. **Clone and install**:
    ```bash
-   git clone https://github.com/davidruzicka/mcp-from-openapi.git
-   cd mcp-from-openapi
+   git clone https://github.com/davidruzicka/mcp4openapi.git
+   cd mcp4openapi
    npm install
    ```
 

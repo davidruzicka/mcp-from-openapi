@@ -354,7 +354,7 @@ Add to `claude_desktop_config.json`:
   "mcpServers": {
     "gitlab": {
       "command": "node",
-      "args": ["/path/to/mcp-from-openapi/dist/index.js"],
+      "args": ["/path/to/mcp4openapi/dist/index.js"],
       "env": {
         "OPENAPI_SPEC_PATH": "your-openapi-spec-path.yaml",
         "MCP_PROFILE_PATH": "your-profile-path.json",

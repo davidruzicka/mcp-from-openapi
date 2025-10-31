@@ -168,7 +168,7 @@ Add to your `mcp.json`:
   "mcpServers": {
     "gitlab": {
       "command": "node",
-      "args": ["/path/to/mcp-from-openapi/dist/index.js"],
+      "args": ["/path/to/mcp4openapi/dist/index.js"],
       "env": {
         "OPENAPI_SPEC_PATH": "/path/to/profiles/examples/gitlab/openapi.yaml",
         "MCP_PROFILE_PATH": "/path/to/profiles/examples/gitlab/developer-profile.json",

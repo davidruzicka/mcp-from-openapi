@@ -40,7 +40,7 @@ Transform any OpenAPI specification into MCP tools **without writing code**. Con
 No installation required:
 
 ```bash
-npx mcp-from-openapi
+npx mcp4openapi
 ```
 
 ### Option B: npm (Recommended)
@@ -48,15 +48,15 @@ npx mcp-from-openapi
 Install globally:
 
 ```bash
-npm install -g mcp-from-openapi
-mcp-from-openapi
+npm install -g mcp4openapi
+mcp4openapi
 ```
 
 ### Option C: Docker
 
 **1. Build image:**
 ```bash
-docker build -t mcp-from-openapi .
+docker build -t mcp4openapi .
 ```
 
 **2. Run with docker-compose:**
@@ -78,8 +78,8 @@ See [docs/DOCKER.md](./docs/DOCKER.md) for authentication modes, production depl
 
 **1. Clone & Install:**
 ```bash
-git clone https://github.com/davidruzicka/mcp-from-openapi.git
-cd mcp-from-openapi
+git clone https://github.com/davidruzicka/mcp4openapi.git
+cd mcp4openapi
 npm install
 ```
 

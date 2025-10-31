@@ -7,7 +7,7 @@ Run MCP from OpenAPI server in an isolated Docker container.
 ### 1. Build Image
 
 ```bash
-docker build -t mcp-from-openapi:latest .
+docker build -t mcp4openapi:latest .
 ```
 
 ### 2. Choose Authentication Mode
@@ -50,7 +50,7 @@ docker run -d \
   -e MCP_PROFILE_PATH=/app/profiles/gitlab/developer-profile.json \
   -e API_TOKEN=your_token \
   -e API_BASE_URL=https://gitlab.com/api/v4 \
-  mcp-from-openapi:latest
+  mcp4openapi:latest
 ```
 
 Multi-user mode:
@@ -64,7 +64,7 @@ docker run -d \
   -e API_BASE_URL=https://gitlab.com/api/v4 \
   -e MCP_TRANSPORT=http \
   -e MCP_HOST=0.0.0.0 \
-  mcp-from-openapi:latest
+  mcp4openapi:latest
 # Clients send: Authorization: Bearer <user_token>
 ```
 
@@ -354,7 +354,7 @@ npm run dev
 ### Build without cache
 
 ```bash
-docker build --no-cache -t mcp-from-openapi:latest .
+docker build --no-cache -t mcp4openapi:latest .
 ```
 
 ### Multi-platform build
@@ -362,7 +362,7 @@ docker build --no-cache -t mcp-from-openapi:latest .
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
-  -t mcp-from-openapi:latest \
+  -t mcp4openapi:latest \
   .
 ```
 
@@ -377,7 +377,7 @@ docker run -d \
   -e OPENAPI_SPEC_PATH=/app/profiles/gitlab/openapi.yaml \
   -e MCP_PROFILE_PATH=/app/profiles/gitlab/developer-profile.json \
   -e API_TOKEN=$GITLAB_TOKEN \
-  mcp-from-openapi:latest
+  mcp4openapi:latest
 ```
 
 ### Production Setup
@@ -400,11 +400,11 @@ docker-compose --env-file .env.docker up -d
 
 ```yaml
 - name: Build Docker image
-  run: docker build -t mcp-from-openapi:${{ github.sha }} .
+  run: docker build -t mcp4openapi:${{ github.sha }} .
 
 - name: Push to registry
   run: |
-    docker tag mcp-from-openapi:${{ github.sha }} registry.example.com/mcp:latest
+    docker tag mcp4openapi:${{ github.sha }} registry.example.com/mcp:latest
     docker push registry.example.com/mcp:latest
 ```
 
@@ -422,7 +422,7 @@ build:
 
 ## Best Practices
 
-1. **Use specific tags**: `mcp-from-openapi:v1.0.0` not `latest`
+1. **Use specific tags**: `mcp4openapi:v1.0.0` not `latest`
 2. **Limit resources**: Set CPU/memory limits
 3. **Health checks**: Always configure health checks
 4. **Structured logs**: Use JSON format for log aggregation

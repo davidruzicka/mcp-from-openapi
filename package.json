@@ -1,5 +1,5 @@
 {
-  "name": "mcp-from-openapi",
+  "name": "mcp4openapi",
   "version": "0.1.0",
   "description": "Universal MCP server that generates tools from any OpenAPI specification",
   "type": "module",
@@ -9,7 +9,7 @@
     "./cli": "./dist/index.js"
   },
   "bin": {
-    "mcp-from-openapi": "dist/src/index.js"
+    "mcp4openapi": "dist/src/index.js"
   },
   "files": [
     "dist",
@@ -43,11 +43,11 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/davidruzicka/mcp-from-openapi.git"
+    "url": "git+https://github.com/davidruzicka/mcp4openapi.git"
   },
-  "homepage": "https://github.com/davidruzicka/mcp-from-openapi#readme",
+  "homepage": "https://github.com/davidruzicka/mcp4openapi#readme",
   "bugs": {
-    "url": "https://github.com/davidruzicka/mcp-from-openapi/issues"
+    "url": "https://github.com/davidruzicka/mcp4openapi/issues"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",
