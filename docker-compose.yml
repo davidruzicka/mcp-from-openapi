@@ -6,14 +6,12 @@ services:
       context: .
       dockerfile: Dockerfile
     image: mcp-from-openapi:latest
-    container_name: mcp-server
+    container_name: mcp-from-openapi
     ports:
       - "3003:3003"
     volumes:
       # Mount your profiles directory
       - ./profiles:/app/profiles:ro
-      # Optional: mount custom OpenAPI specs
-      # - ./specs:/app/specs:ro
     environment:
       # Required
       - OPENAPI_SPEC_PATH=/app/profiles/gitlab/openapi.yaml

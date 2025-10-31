@@ -8,11 +8,14 @@
 import { HttpClient, InterceptorChain } from '../interceptors.js';
 import type { InterceptorConfig } from '../types/profile.js';
 
+// Request input type for fetch mocking
+type RequestInput = any;
+
 /**
  * Create HTTP client with interceptors for testing
  */
 export function createTestHttpClient(
-  baseUrl: string = 'https://api.example.com',
+  baseUrl: RequestInput = 'https://api.example.com',
   interceptors: InterceptorConfig = {}
 ): HttpClient {
   const interceptorChain = new InterceptorChain(interceptors);
@@ -25,12 +28,12 @@ export function createTestHttpClient(
 export function setupFetchMock(
   responseBody: any = { ok: true },
   responseOptions: ResponseInit = { status: 200, headers: { 'Content-Type': 'application/json' } }
-): { capturedHeaders: Record<string, string> } {
-  const capturedHeaders: Record<string, string> = {};
+): { capturedHeaders: Record<RequestInput, RequestInput> } {
+  const capturedHeaders: Record<RequestInput, RequestInput> = {};
 
-  global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
+  global.fetch = async (url: RequestInput | URL, init?: RequestInit) => {
     // Copy headers to the shared object
-    Object.assign(capturedHeaders, init?.headers as Record<string, string> || {});
+    Object.assign(capturedHeaders, init?.headers as Record<RequestInput, RequestInput> || {});
     return new Response(JSON.stringify(responseBody), responseOptions);
   };
 
@@ -40,7 +43,7 @@ export function setupFetchMock(
 /**
  * Setup fetch mock that returns error response
  */
-export function setupErrorFetchMock(status: number = 500, message: string = 'Internal Server Error'): void {
+export function setupErrorFetchMock(status: number = 500, message: RequestInput = 'Internal Server Error'): void {
   global.fetch = async () => new Response(JSON.stringify({ message }), {
     status,
     headers: { 'Content-Type': 'application/json' }
@@ -77,18 +80,18 @@ export function restoreFetch(): void {
  * Test helper for HTTP client tests
  */
 export class HttpTestHelper {
-  private capturedHeaders: Record<string, string> = {};
+  private capturedHeaders: Record<RequestInput, RequestInput> = {};
 
   constructor(
-    private baseUrl: string = 'https://api.example.com',
+    private baseUrl: RequestInput = 'https://api.example.com',
     private interceptors: InterceptorConfig = {}
   ) {
     this.setupMock();
   }
 
   private setupMock(): void {
-    global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
-      this.capturedHeaders = init?.headers as Record<string, string>;
+    global.fetch = async (url: RequestInput | URL, init?: RequestInit) => {
+      this.capturedHeaders = init?.headers as Record<RequestInput, RequestInput>;
       return new Response(JSON.stringify({ ok: true }), {
         status: 200,
         headers: { 'Content-Type': 'application/json' }
@@ -100,13 +103,13 @@ export class HttpTestHelper {
     return createTestHttpClient(this.baseUrl, this.interceptors);
   }
 
-  getCapturedHeaders(): Record<string, string> {
+  getCapturedHeaders(): Record<RequestInput, RequestInput> {
     return { ...this.capturedHeaders };
   }
 
   setResponse(responseBody: any, options?: ResponseInit): void {
-    global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
-      Object.assign(this.capturedHeaders, init?.headers as Record<string, string> || {});
+    global.fetch = async (url: RequestInput | URL, init?: RequestInit) => {
+      Object.assign(this.capturedHeaders, init?.headers as Record<RequestInput, RequestInput> || {});
       return new Response(JSON.stringify(responseBody), {
         status: 200,
         headers: { 'Content-Type': 'application/json' },
@@ -115,9 +118,9 @@ export class HttpTestHelper {
     };
   }
 
-  setErrorResponse(status: number, message: string): void {
-    global.fetch = async (url: RequestInfo | URL, init?: RequestInit) => {
-      Object.assign(this.capturedHeaders, init?.headers as Record<string, string> || {});
+  setErrorResponse(status: number, message: RequestInput): void {
+    global.fetch = async (url: RequestInput | URL, init?: RequestInit) => {
+      Object.assign(this.capturedHeaders, init?.headers as Record<RequestInput, RequestInput> || {});
       return new Response(JSON.stringify({ message }), {
         status,
         headers: { 'Content-Type': 'application/json' }

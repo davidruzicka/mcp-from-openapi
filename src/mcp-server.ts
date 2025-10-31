@@ -108,8 +108,9 @@ export class MCPServer {
     // For stdio transport, create client with env token
     // For HTTP transport, clients are created per-session with user's token
     const baseUrl = this.getBaseUrl();
-    const hasAuth = !!this.profile.interceptors?.auth;
-    const envToken = hasAuth ? process.env[this.profile.interceptors.auth.value_from_env] : undefined;
+    const authConfig = this.profile.interceptors?.auth;
+    const hasAuth = !!authConfig;
+    const envToken = hasAuth ? process.env[authConfig.value_from_env] : undefined;
 
     if (hasAuth && envToken) {
       // Token available in env - create global client (stdio transport)
@@ -245,7 +246,7 @@ export class MCPServer {
 
     // Execute tool
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      if (!this.profile || !this.httpClient || !this.compositeExecutor) {
+      if (!this.profile || !this.compositeExecutor) {
         throw new ConfigurationError('Server not initialized. Call initialize() first.');
       }
 
@@ -520,12 +521,12 @@ export class MCPServer {
    */
   private async handleJsonRpcMessage(message: unknown, sessionId?: string): Promise<unknown> {
     // Handle initialize
-    if (this.isInitializeRequest(message)) {
+    if (isInitializeRequest(message)) {
       return this.handleInitialize(message, sessionId);
     }
 
     // Handle tool calls
-    if (this.isToolCallRequest(message)) {
+    if (isToolCallRequest(message)) {
       return await this.handleToolCall(message, sessionId);
     }
 
