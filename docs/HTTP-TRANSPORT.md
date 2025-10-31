@@ -65,7 +65,7 @@ npm start
 
 **Each client sends their own token in `Authorization: Bearer <token>` header during initialization.**
 
-**Security Warning**: When binding to `0.0.0.0`, ensure firewall protection, configure `ALLOWED_ORIGINS`, and use HTTPS reverse proxy.
+**Security Warning**: When binding to `0.0.0.0`, ensure firewall protection, configure `ALLOWED_ORIGINS`, and use HTTPS reverse proxy. Server will log warning if `ALLOWED_ORIGINS` is not configured.
 
 ## MCP Protocol Compliance
 
@@ -401,6 +401,11 @@ export HEARTBEAT_INTERVAL_MS=30000  # 30 seconds
 - Additionally allows: Origins in `ALLOWED_ORIGINS` (if configured)
 - Rejects: Other origins with **HTTP 403**
 
+**Default Configuration**:
+- `ALLOWED_ORIGINS` is empty by default
+- Server binds to `localhost` (127.0.0.1) by default
+- **Warning logged** if binding to non-localhost with empty `ALLOWED_ORIGINS`
+
 **Supported Formats**:
 
 ```bash
@@ -448,7 +453,9 @@ export MCP_HOST=127.0.0.1  # Secure (default)
 export MCP_HOST=0.0.0.0    # Network access (use with caution!)
 ```
 
-**Warning**: Logs warning when binding to `0.0.0.0`
+**Security Warning**: When binding to non-localhost address without `ALLOWED_ORIGINS` configured, server logs warning. Always set `ALLOWED_ORIGINS` when exposing server to network or bind to `localhost`.
+
+**Default `ALLOWED_ORIGINS`**: Empty (no origins allowed except localhost).
 
 ### Best Practices
 

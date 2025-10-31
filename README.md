@@ -108,14 +108,14 @@ See [docs/HTTP-TRANSPORT.md](./docs/HTTP-TRANSPORT.md) for transport options (st
 - `API_TOKEN`: API token (required for stdio, optional for HTTP with per-session tokens)
 
 ### Optional - Core
-- `MCP_PROFILE_PATH`: Profile JSON path (default: all tools defined from OpenAPI spec)
+- `MCP_PROFILE_PATH`: Profile JSON path (default: auto-generate tools from OpenAPI spec; warning logged if tool exceeds 60 parameters)
 - `MCP_TRANSPORT`: `stdio` (default) or `http`
 - `API_BASE_URL`: Override OpenAPI server URL
 
 ### Optional - HTTP Transport
-- `MCP_HOST`: Bind address (default: `127.0.0.1`)
+- `MCP_HOST`: Bind address (default: `127.0.0.1`; warning logged if non-localhost with empty `ALLOWED_ORIGINS`)
 - `MCP_PORT`: Port (default: `3003`)
-- `ALLOWED_ORIGINS`: Comma-separated origins (supports exact, wildcard `*.domain.com`, CIDR `192.168.1.0/24`)
+- `ALLOWED_ORIGINS`: Comma-separated origins (default: empty; supports exact, wildcard `*.domain.com`, CIDR `192.168.1.0/24`)
 - `SESSION_TIMEOUT_MS`: Session timeout (default: `1800000` = 30min)
 - `HEARTBEAT_ENABLED`: SSE heartbeat (default: `false`)
 - `HEARTBEAT_INTERVAL_MS`: Heartbeat interval (default: `30000` = 30s)
@@ -123,10 +123,12 @@ See [docs/HTTP-TRANSPORT.md](./docs/HTTP-TRANSPORT.md) for transport options (st
 ### Optional - Observability
 - `LOG_LEVEL`: `debug`, `info` (default), `warn`, `error`
 - `LOG_FORMAT`: `console` (default) or `json`
-
-**Security Note**: Sensitive auth tokens are automatically redacted from logs based on your profile's auth configuration (bearer, query, or custom-header).
 - `METRICS_ENABLED`: Enable Prometheus metrics (default: `false`)
 - `METRICS_PATH`: Metrics endpoint (default: `/metrics`)
+
+**Security Note**: 
+- Sensitive auth tokens are automatically redacted from logs based on your profile's auth configuration (bearer, query, or custom-header)
+- All errors returned to clients are sanitized to generic messages (`Internal error`) while full details are logged server-side
 
 ## Profile System
 

@@ -17,6 +17,8 @@ import fs from 'fs/promises';
 import type { Profile } from './types/profile.js';
 import { ValidationError } from './errors.js';
 import { profileSchema, authInterceptorSchema } from './generated-schemas.js';
+import type { OpenAPIParser } from './openapi-parser.js';
+import type { OperationInfo, SchemaInfo } from './types/openapi.js';
 
 // Schemas are now auto-generated from TypeScript types!
 // See scripts/generate-schemas.js for details.
@@ -300,18 +302,109 @@ export class ProfileLoader {
   }
 
   /**
-   * Create a minimal default profile from OpenAPI spec
+   * Create a default profile with auto-generated tools from OpenAPI spec
    *
    * Why: Allows running server without profile for quick exploration.
    * Generates simple pass-through tools for all operations.
    */
-  static createDefaultProfile(profileName: string): Profile {
+  static createDefaultProfile(profileName: string, parser: OpenAPIParser): Profile {
+    const operations = parser.getAllOperations();
+    const tools = operations.map(op => this.generateToolFromOperation(op));
+
     return {
       profile_name: profileName,
-      description: 'Auto-generated default profile',
-      tools: [],
+      description: `Auto-generated default profile with ${tools.length} tools from OpenAPI spec`,
+      tools,
       interceptors: {},
     };
+  }
+
+  /**
+   * Generate a simple tool from an OpenAPI operation
+   *
+   * Creates a tool with parameters based on the operation's path/query/header parameters
+   * and request body. Uses operationId as tool name and summary/description for tool description.
+   */
+  private static generateToolFromOperation(operation: OperationInfo): import('./types/profile.js').ToolDefinition {
+    const parameters: Record<string, import('./types/profile.js').ParameterDefinition> = {};
+
+    // Add path parameters
+    for (const param of operation.parameters) {
+      parameters[param.name] = {
+        type: this.mapOpenAPISchemaToParameterType(param.schema),
+        description: param.description || `Parameter ${param.name}`,
+        required: param.required,
+      };
+    }
+
+    // Add request body parameters if present
+    if (operation.requestBody?.content) {
+      // For simplicity, assume JSON content and flatten the schema
+      const jsonContent = operation.requestBody.content['application/json'];
+      if (jsonContent?.schema) {
+        this.flattenSchemaToParameters(jsonContent.schema, parameters, operation.requestBody.required);
+      }
+    }
+
+    // Warn if parameter inflation exceeds threshold
+    const paramCount = Object.keys(parameters).length;
+    if (paramCount > 60) {
+      // Using console.warn to avoid adding logger dependency here
+      console.warn(
+        `[ProfileLoader] Generated tool has ${paramCount} parameters (>60). Operation: ${operation.operationId} ${operation.method.toUpperCase()} ${operation.path}`
+      );
+    }
+
+    return {
+      name: operation.operationId,
+      description: operation.summary || operation.description || `Execute ${operation.method.toUpperCase()} ${operation.path}`,
+      operations: {
+        'execute': operation.operationId,
+      },
+      parameters,
+    };
+  }
+
+  /**
+   * Map OpenAPI schema to parameter type
+   */
+  private static mapOpenAPISchemaToParameterType(schema: SchemaInfo): 'string' | 'integer' | 'number' | 'boolean' | 'array' | 'object' {
+    switch (schema.type) {
+      case 'string':
+        return 'string';
+      case 'integer':
+        return 'integer';
+      case 'number':
+        return 'number';
+      case 'boolean':
+        return 'boolean';
+      case 'array':
+        return 'array';
+      case 'object':
+        return 'object';
+      default:
+        return 'string'; // fallback
+    }
+  }
+
+  /**
+   * Recursively flatten schema properties to parameters
+   */
+  private static flattenSchemaToParameters(
+    schema: SchemaInfo,
+    parameters: Record<string, import('./types/profile.js').ParameterDefinition>,
+    required: boolean = false
+  ): void {
+    if (schema.type === 'object' && schema.properties) {
+      for (const [propName, propSchema] of Object.entries(schema.properties)) {
+        const isRequired = schema.required?.includes(propName) || required;
+        parameters[propName] = {
+          type: this.mapOpenAPISchemaToParameterType(propSchema as SchemaInfo),
+          description: `Property ${propName}`,
+          required: isRequired,
+        };
+      }
+    }
   }
 }
 

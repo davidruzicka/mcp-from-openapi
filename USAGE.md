@@ -207,6 +207,21 @@ Access levels:
 }
 ```
 
+## Auto-Generated Default Profile
+
+When no profile is specified (`MCP_PROFILE_PATH` not set), server automatically generates tools from OpenAPI specification:
+
+**Features**:
+- One tool per OpenAPI operation (using `operationId` as name)
+- Parameters extracted from path, query, and request body
+- Simple pass-through to API
+
+**Parameter Inflation Warning**: If generated tool exceeds 60 parameters, warning is logged. This may happen with complex API operations.
+
+**Recommendation**: For production use, create custom profiles that aggregate operations and filter response fields.
+
+See [docs/PROFILE-GUIDE.md](./docs/PROFILE-GUIDE.md) for details.
+
 ## Creating Custom Profiles
 
 Create a JSON file with your tool definitions:
@@ -312,6 +327,18 @@ Result structure:
   }
 }
 ```
+
+## Error Handling
+
+### Generic Error Messages
+
+For security, all errors returned to clients are sanitized to generic messages (`Internal error`). Detailed error information is only logged server-side with automatic token redaction.
+
+**Why**: Prevents leakage of sensitive internal details (configuration, tokens, stack traces) to clients.
+
+**Example**:
+- Client receives: `{"error": {"code": -32603, "message": "Internal error"}}`
+- Server logs: Full error with stack trace (tokens redacted)
 
 ## Troubleshooting
 

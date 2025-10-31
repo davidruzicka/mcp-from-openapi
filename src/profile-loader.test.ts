@@ -211,10 +211,13 @@ describe('ProfileLoader', () => {
     });
   });
 
-  it('should create default profile', () => {
-    const profile = ProfileLoader.createDefaultProfile('my-api');
+  it('should create default profile', async () => {
+    const parser = new (await import('./openapi-parser.js')).OpenAPIParser();
+    await parser.load('profiles/gitlab/openapi.yaml');
+    const profile = ProfileLoader.createDefaultProfile('my-api', parser);
     expect(profile.profile_name).toBe('my-api');
-    expect(profile.tools).toEqual([]);
+    expect(profile.tools.length).toBeGreaterThan(0);
+    expect(profile.description).toContain('Auto-generated default profile');
   });
 
   describe('Operation keys validation', () => {
@@ -389,6 +392,38 @@ describe('ProfileLoader', () => {
 
       await expect(loader.load(tmpPath)).rejects.toThrow('Did you mean one of: create?');
     });
+  });
+
+  it('should warn when generated tool exceeds 60 parameters', async () => {
+    const warnSpy = (await import('vitest')).vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    // Fake parser with one operation having 61 query parameters
+    const fakeParser: any = {
+      getAllOperations: () => {
+        const params = Array.from({ length: 61 }).map((_, i) => ({
+          name: `p${i}`,
+          in: 'query',
+          required: false,
+          schema: { type: 'string' },
+          description: `Param ${i}`,
+        }));
+
+        return [{
+          operationId: 'op_many_params',
+          method: 'get',
+          path: '/test',
+          parameters: params,
+          summary: 'Many params',
+        }];
+      }
+    };
+
+    const profile = ProfileLoader.createDefaultProfile('test', fakeParser);
+    expect(profile.tools.length).toBe(1);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+    expect(warnSpy.mock.calls[0][0]).toContain('>60');
+
+    warnSpy.mockRestore();
   });
 });
 

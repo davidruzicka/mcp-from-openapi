@@ -94,8 +94,11 @@ export class MCPServer {
         toolCount: this.profile.tools.length,
       });
     } else {
-      this.profile = ProfileLoader.createDefaultProfile('default');
-      this.logger.warn('Using default profile (no profile specified)');
+      this.profile = ProfileLoader.createDefaultProfile('default', this.parser);
+      this.logger.info('Using auto-generated default profile', {
+        profile: this.profile.profile_name,
+        toolCount: this.profile.tools.length,
+      });
     }
 
     // Re-create logger with auth config for token redaction
@@ -233,65 +236,77 @@ export class MCPServer {
   private setupHandlers(): void {
     // List available tools
     this.server.setRequestHandler(ListToolsRequestSchema, async () => {
-      if (!this.profile) {
-        throw new ConfigurationError('Server not initialized. Call initialize() first.');
+      try {
+        if (!this.profile) {
+          throw new ConfigurationError('Server not initialized. Call initialize() first.');
+        }
+
+        const tools = this.profile.tools.map(toolDef =>
+          this.toolGenerator.generateTool(toolDef)
+        );
+
+        return { tools };
+      } catch (err) {
+        this.logger.error('ListTools handler error', err as Error);
+        // Always return generic error to clients
+        throw new Error('Internal error');
       }
-
-      const tools = this.profile.tools.map(toolDef =>
-        this.toolGenerator.generateTool(toolDef)
-      );
-
-      return { tools };
     });
 
     // Execute tool
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
-      if (!this.profile || !this.compositeExecutor) {
-        throw new ConfigurationError('Server not initialized. Call initialize() first.');
-      }
+      try {
+        if (!this.profile || !this.compositeExecutor) {
+          throw new ConfigurationError('Server not initialized. Call initialize() first.');
+        }
 
-      const toolDef = this.profile.tools.find(t => t.name === request.params.name);
-      if (!toolDef) {
-        throw new OperationNotFoundError(request.params.name);
-      }
+        const toolDef = this.profile.tools.find(t => t.name === request.params.name);
+        if (!toolDef) {
+          throw new OperationNotFoundError(request.params.name);
+        }
 
-      const args = request.params.arguments || {};
-      
-      // Validate arguments
-      this.toolGenerator.validateArguments(toolDef, args);
-
-      // Execute composite or simple tool
-      let result: unknown;
-      
-      if (toolDef.composite && toolDef.steps) {
-        const compositeResult = await this.compositeExecutor.execute(
-          toolDef.steps,
-          args,
-          toolDef.partial_results || false
-        );
+        const args = request.params.arguments || {};
         
-        // Include metadata about completion
-        result = {
-          ...compositeResult.data,
-          _metadata: {
-            completed_steps: compositeResult.completed_steps,
-            total_steps: compositeResult.total_steps,
-            success: compositeResult.completed_steps === compositeResult.total_steps,
-            errors: compositeResult.errors,
-          },
-        };
-      } else {
-        result = await this.executeSimpleTool(toolDef, args);
-      }
+        // Validate arguments
+        this.toolGenerator.validateArguments(toolDef, args);
 
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(result, null, 2),
-          },
-        ],
-      };
+        // Execute composite or simple tool
+        let result: unknown;
+        
+        if (toolDef.composite && toolDef.steps) {
+          const compositeResult = await this.compositeExecutor.execute(
+            toolDef.steps,
+            args,
+            toolDef.partial_results || false
+          );
+          
+          // Include metadata about completion
+          result = {
+            ...compositeResult.data,
+            _metadata: {
+              completed_steps: compositeResult.completed_steps,
+              total_steps: compositeResult.total_steps,
+              success: compositeResult.completed_steps === compositeResult.total_steps,
+              errors: compositeResult.errors,
+            },
+          };
+        } else {
+          result = await this.executeSimpleTool(toolDef, args);
+        }
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      } catch (err) {
+        this.logger.error('CallTool handler error', err as Error);
+        // Throw generic error for stdio clients
+        throw new Error('Internal error');
+      }
     });
   }
 
@@ -497,6 +512,13 @@ export class MCPServer {
         : undefined,
     };
 
+    // Warn if binding to non-localhost without explicit ALLOWED_ORIGINS
+    const isLocalhost = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+    const hasAllowedOrigins = Array.isArray(config.allowedOrigins) && config.allowedOrigins.length > 0;
+    if (!isLocalhost && !hasAllowedOrigins) {
+      this.logger.warn('Binding to non-localhost with empty ALLOWED_ORIGINS. Set ALLOWED_ORIGINS or bind to localhost.');
+    }
+
     this.httpTransport = new HttpTransport(config, this.logger);
     
     // Set message handler to process JSON-RPC messages
@@ -609,12 +631,14 @@ export class MCPServer {
         },
       };
     } catch (error) {
+      // Log internal error details, but return generic message to client
+      this.logger.error('Tool call error', error as Error);
       return {
         jsonrpc: '2.0',
         id: req.id,
         error: {
           code: -32603,
-          message: (error as Error).message,
+          message: 'Internal error',
         },
       };
     }
