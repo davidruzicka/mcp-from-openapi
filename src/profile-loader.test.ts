@@ -220,6 +220,41 @@ describe('ProfileLoader', () => {
     expect(profile.description).toContain('Auto-generated default profile');
   });
 
+  it('should shorten tool names when strategy is configured', async () => {
+    const parser = new (await import('./openapi-parser.js')).OpenAPIParser();
+    await parser.load('profiles/gitlab/openapi.yaml');
+    
+    // Set env vars for shortening
+    const oldStrategy = process.env.MCP_TOOLNAME_STRATEGY;
+    const oldWarn = process.env.MCP_TOOLNAME_WARN_ONLY;
+    const oldMax = process.env.MCP_TOOLNAME_MAX;
+    
+    process.env.MCP_TOOLNAME_STRATEGY = 'hash';
+    process.env.MCP_TOOLNAME_WARN_ONLY = 'false';
+    process.env.MCP_TOOLNAME_MAX = '30';
+    
+    try {
+      const profile = ProfileLoader.createDefaultProfile('my-api', parser);
+      
+      // All tool names should be ≤ 30 characters
+      profile.tools.forEach(tool => {
+        expect(tool.name.length).toBeLessThanOrEqual(30);
+      });
+      
+      // Should have some tools with shortened names
+      const hasShortNames = profile.tools.some(t => t.name.length < 20);
+      expect(hasShortNames).toBe(true);
+    } finally {
+      // Restore env vars
+      if (oldStrategy !== undefined) process.env.MCP_TOOLNAME_STRATEGY = oldStrategy;
+      else delete process.env.MCP_TOOLNAME_STRATEGY;
+      if (oldWarn !== undefined) process.env.MCP_TOOLNAME_WARN_ONLY = oldWarn;
+      else delete process.env.MCP_TOOLNAME_WARN_ONLY;
+      if (oldMax !== undefined) process.env.MCP_TOOLNAME_MAX = oldMax;
+      else delete process.env.MCP_TOOLNAME_MAX;
+    }
+  });
+
   describe('Operation keys validation', () => {
     it('should accept direct action enum values', async () => {
       const loader = new ProfileLoader();

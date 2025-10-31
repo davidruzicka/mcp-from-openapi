@@ -112,6 +112,41 @@ See [docs/HTTP-TRANSPORT.md](./docs/HTTP-TRANSPORT.md) for transport options (st
 - `MCP_TRANSPORT`: `stdio` (default) or `http`
 - `API_BASE_URL`: Override OpenAPI server URL
 
+### Optional - Tool Name Shortening
+When generating tools from OpenAPI without a profile, long operation IDs may exceed limits. Configure automatic shortening:
+
+- `MCP_TOOLNAME_MAX`: Maximum tool name length (default: `45`)
+- `MCP_TOOLNAME_STRATEGY`: Shortening strategy: `none|balanced|iterative|hash|auto` (default: `none`)
+  - `none`: No shortening, only warnings
+  - `balanced`: Add parts by importance until unique & meaningful (recommended, min 3 parts, 20 chars)
+  - `iterative`: Progressively remove noise until under limit (conservative)
+  - `hash`: Use verb + resource + hash for guaranteed uniqueness
+  - `auto`: Try strategies in order: balanced → iterative → hash
+- `MCP_TOOLNAME_WARN_ONLY`: Only warn, don't shorten: `true|false` (default: `true`)
+- `MCP_TOOLNAME_MIN_PARTS`: Minimum parts for balanced strategy (default: `3`)
+- `MCP_TOOLNAME_MIN_LENGTH`: Minimum length in chars for balanced strategy (default: `20`)
+
+**Example**: Apply balanced shortening (recommended):
+```bash
+export MCP_TOOLNAME_STRATEGY=balanced
+export MCP_TOOLNAME_WARN_ONLY=false
+```
+
+**Result** for balanced strategy:
+```
+putApiV4ProjectsIdAlertManagementAlertsAlertIidMetricImagesMetricImageId
+    → put_alert_management_image (26 chars)
+deleteApiV4ProjectsIdAlertManagementAlertsAlertIidMetricImagesMetricImageId
+    → delete_alert_management_image (26 chars)
+```
+
+**Example**: Apply iterative shortening with 30 char limit:
+```bash
+export MCP_TOOLNAME_STRATEGY=iterative
+export MCP_TOOLNAME_WARN_ONLY=false
+export MCP_TOOLNAME_MAX=30
+```
+
 ### Optional - HTTP Transport
 - `MCP_HOST`: Bind address (default: `127.0.0.1`; warning logged if non-localhost with empty `ALLOWED_ORIGINS`)
 - `MCP_PORT`: Port (default: `3003`)

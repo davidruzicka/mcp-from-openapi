@@ -19,6 +19,7 @@ import { ValidationError } from './errors.js';
 import { profileSchema, authInterceptorSchema } from './generated-schemas.js';
 import type { OpenAPIParser } from './openapi-parser.js';
 import type { OperationInfo, SchemaInfo } from './types/openapi.js';
+import { shortenToolName, NamingStrategy, levenshteinDistance, type OperationForNaming, type ShortenResult } from './naming.js';
 
 // Schemas are now auto-generated from TypeScript types!
 // See scripts/generate-schemas.js for details.
@@ -181,7 +182,7 @@ export class ProfileLoader {
     // Levenshtein distance suggestions for actions
     const maxDistance = Math.min(2, invalidKey.length - 1);
     for (const action of actionEnum) {
-      if (this.levenshteinDistance(invalidKey, action) <= maxDistance) {
+      if (levenshteinDistance(invalidKey, action) <= maxDistance) {
         suggestions.push(action);
       }
     }
@@ -191,7 +192,7 @@ export class ProfileLoader {
       for (const action of actionEnum) {
         for (const resourceType of resourceTypeEnum) {
           const compositeKey = `${action}_${resourceType}`;
-          if (this.levenshteinDistance(invalidKey, compositeKey) <= maxDistance) {
+          if (levenshteinDistance(invalidKey, compositeKey) <= maxDistance) {
             suggestions.push(compositeKey);
           }
         }
@@ -200,29 +201,6 @@ export class ProfileLoader {
 
     // Remove duplicates and return unique suggestions
     return [...new Set(suggestions)];
-  }
-
-  /**
-   * Calculate Levenshtein distance between two strings
-   */
-  private levenshteinDistance(a: string, b: string): number {
-    const matrix = Array(b.length + 1).fill(null).map(() => Array(a.length + 1).fill(null));
-
-    for (let i = 0; i <= a.length; i++) matrix[0][i] = i;
-    for (let j = 0; j <= b.length; j++) matrix[j][0] = j;
-
-    for (let j = 1; j <= b.length; j++) {
-      for (let i = 1; i <= a.length; i++) {
-        const indicator = a[i - 1] === b[j - 1] ? 0 : 1;
-        matrix[j][i] = Math.min(
-          matrix[j][i - 1] + 1,     // deletion
-          matrix[j - 1][i] + 1,     // insertion
-          matrix[j - 1][i - 1] + indicator // substitution
-        );
-      }
-    }
-
-    return matrix[b.length][a.length];
   }
 
   /**
@@ -309,7 +287,37 @@ export class ProfileLoader {
    */
   static createDefaultProfile(profileName: string, parser: OpenAPIParser): Profile {
     const operations = parser.getAllOperations();
-    const tools = operations.map(op => this.generateToolFromOperation(op));
+    
+    // Get configuration for name shortening
+    const maxLength = parseInt(process.env.MCP_TOOLNAME_MAX || '45', 10);
+    const strategyStr = (process.env.MCP_TOOLNAME_STRATEGY || 'none').toLowerCase();
+    const warnOnly = (process.env.MCP_TOOLNAME_WARN_ONLY || 'true').toLowerCase() === 'true';
+    const minParts = parseInt(process.env.MCP_TOOLNAME_MIN_PARTS || '3', 10);
+    const minLength = parseInt(process.env.MCP_TOOLNAME_MIN_LENGTH || '20', 10);
+    
+    const strategy = Object.values(NamingStrategy).includes(strategyStr as NamingStrategy)
+      ? (strategyStr as NamingStrategy)
+      : NamingStrategy.None;
+    
+    const shouldShorten = strategy !== NamingStrategy.None && !warnOnly;
+    
+    // Convert to OperationForNaming for shortening
+    const opsForNaming: OperationForNaming[] = operations.map(op => ({
+      operationId: op.operationId,
+      method: op.method,
+      path: op.path,
+      tags: op.tags,
+    }));
+
+    const tools = operations.map(op => 
+      this.generateToolFromOperation(
+        op,
+        shouldShorten ? strategy : NamingStrategy.None,
+        maxLength,
+        opsForNaming,
+        { minParts, minLength }
+      )
+    );
 
     return {
       profile_name: profileName,
@@ -325,7 +333,13 @@ export class ProfileLoader {
    * Creates a tool with parameters based on the operation's path/query/header parameters
    * and request body. Uses operationId as tool name and summary/description for tool description.
    */
-  private static generateToolFromOperation(operation: OperationInfo): import('./types/profile.js').ToolDefinition {
+  private static generateToolFromOperation(
+    operation: OperationInfo,
+    strategy: NamingStrategy = NamingStrategy.None,
+    maxLength: number = 45,
+    allOperations: OperationForNaming[] = [],
+    options?: { minParts?: number; minLength?: number }
+  ): import('./types/profile.js').ToolDefinition {
     const parameters: Record<string, import('./types/profile.js').ParameterDefinition> = {};
 
     // Add path parameters
@@ -355,8 +369,24 @@ export class ProfileLoader {
       );
     }
 
+    // Apply name shortening if strategy is specified
+    const opForNaming: OperationForNaming = {
+      operationId: operation.operationId,
+      method: operation.method,
+      path: operation.path,
+      tags: operation.tags,
+    };
+    
+    const nameResult = shortenToolName(
+      opForNaming,
+      strategy,
+      maxLength,
+      allOperations.length > 0 ? allOperations : [opForNaming],
+      options
+    );
+
     return {
-      name: operation.operationId,
+      name: nameResult.name,
       description: operation.summary || operation.description || `Execute ${operation.method.toUpperCase()} ${operation.path}`,
       operations: {
         'execute': operation.operationId,

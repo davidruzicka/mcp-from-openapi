@@ -25,6 +25,8 @@ import type { Logger } from './logger.js';
 import { ConsoleLogger, JsonLogger } from './logger.js';
 import type { OperationInfo } from './types/openapi.js';
 import { isInitializeRequest, isToolCallRequest } from './jsonrpc-validator.js';
+import { generateNameWarnings, type NameWarningOptions } from './naming-warnings.js';
+import { NamingStrategy, type OperationForNaming } from './naming.js';
 
 export class MCPServer {
   private server: Server;
@@ -99,6 +101,9 @@ export class MCPServer {
         profile: this.profile.profile_name,
         toolCount: this.profile.tools.length,
       });
+      
+      // Check if we should warn about long names
+      this.checkToolNameLengths();
     }
 
     // Re-create logger with auth config for token redaction
@@ -147,6 +152,39 @@ export class MCPServer {
     return logFormat === 'json'
       ? new JsonLogger(logLevel, authConfig)
       : new ConsoleLogger(logLevel, authConfig);
+  }
+
+  /**
+   * Check tool name lengths and warn if needed
+   */
+  private checkToolNameLengths(): void {
+    const maxLength = parseInt(process.env.MCP_TOOLNAME_MAX || '45', 10);
+    const strategy = (process.env.MCP_TOOLNAME_STRATEGY || 'none').toLowerCase() as NamingStrategy;
+    const warnOnly = (process.env.MCP_TOOLNAME_WARN_ONLY || 'true').toLowerCase() === 'true';
+    
+    // Only warn if strategy is 'none' or warn-only mode is enabled
+    if (strategy !== NamingStrategy.None && !warnOnly) {
+      return; // Names already shortened, no need to warn
+    }
+    
+    // Get all operations as OperationForNaming
+    const operations = this.parser.getAllOperations();
+    const opsForNaming: OperationForNaming[] = operations.map(op => ({
+      operationId: op.operationId,
+      method: op.method,
+      path: op.path,
+      tags: op.tags,
+    }));
+    
+    const warningOptions: NameWarningOptions = {
+      maxLength,
+      similarTopN: parseInt(process.env.MCP_TOOLNAME_SIMILAR_TOP || '3', 10),
+      similarityThreshold: parseFloat(process.env.MCP_TOOLNAME_SIMILARITY_THRESHOLD || '0.75'),
+      minParts: parseInt(process.env.MCP_TOOLNAME_MIN_PARTS || '3', 10),
+      minLength: parseInt(process.env.MCP_TOOLNAME_MIN_LENGTH || '20', 10),
+    };
+    
+    generateNameWarnings(opsForNaming, warningOptions, this.logger);
   }
 
   /**
