@@ -1,0 +1,48 @@
+# Source files
+src/
+scripts/
+
+# Tests
+*.test.ts
+*.test.js
+vitest.config.ts
+vitest.config.js
+
+# Development files
+.env
+.env.example
+.env.*
+tsconfig.json
+.gitignore
+.git/
+.github/
+
+# Documentation (keep only README.md and LICENSE.md via "files" in package.json)
+docs/
+CONTRIBUTING.md
+IMPLEMENTATION.md
+TODO.md
+USAGE.md
+
+# Docker
+Dockerfile
+docker-compose.yml
+example-run.sh
+
+# Build artifacts
+*.tsbuildinfo
+node_modules/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Examples and profiles (users will use their own)
+profiles/
+
+# Logs
+*.log
+npm-debug.log*
+

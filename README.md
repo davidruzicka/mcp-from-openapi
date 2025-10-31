@@ -35,7 +35,24 @@ Transform any OpenAPI specification into MCP tools **without writing code**. Con
 
 ## Quick Start
 
-### Option A: Docker (Recommended)
+### Option A: npx (Fastest)
+
+No installation required:
+
+```bash
+npx mcp-from-openapi
+```
+
+### Option B: npm (Recommended)
+
+Install globally:
+
+```bash
+npm install -g mcp-from-openapi
+mcp-from-openapi
+```
+
+### Option C: Docker
 
 **1. Build image:**
 ```bash
@@ -57,21 +74,27 @@ curl http://localhost:3003/health
 
 See [docs/DOCKER.md](./docs/DOCKER.md) for authentication modes, production deployment, and security.
 
-### Option B: Local Development
+## Local Development
 
-**1. Install & Build:**
+**1. Clone & Install:**
 ```bash
+git clone https://github.com/davidruzicka/mcp-from-openapi.git
+cd mcp-from-openapi
 npm install
+```
+
+**2. Build:**
+```bash
 npm run build
 ```
 
-**2. Configure:**
+**3. Configure:**
 ```bash
 cp .env.example .env
 # Edit .env with your settings
 ```
 
-**3. Run:**
+**4. Run:**
 ```bash
 npm start
 ```
