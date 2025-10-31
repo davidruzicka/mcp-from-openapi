@@ -15,7 +15,7 @@
 
 import fs from 'fs/promises';
 import type { Profile } from './types/profile.js';
-import { ValidationError } from './errors.js';
+import { ValidationError, ConfigurationError } from './errors.js';
 import { profileSchema, authInterceptorSchema } from './generated-schemas.js';
 import type { OpenAPIParser } from './openapi-parser.js';
 import type { OperationInfo, SchemaInfo } from './types/openapi.js';
@@ -284,6 +284,11 @@ export class ProfileLoader {
    *
    * Why: Allows running server without profile for quick exploration.
    * Generates simple pass-through tools for all operations.
+   * 
+   * Auth Strategy:
+   * 1. Parse security scheme from OpenAPI spec
+   * 2. If found, generate auth interceptor
+   * 3. Fallback to bearer token from API_TOKEN env var
    */
   static createDefaultProfile(profileName: string, parser: OpenAPIParser): Profile {
     const operations = parser.getAllOperations();
@@ -319,12 +324,143 @@ export class ProfileLoader {
       )
     );
 
+    // Generate auth interceptor from OpenAPI security scheme
+    const interceptors = this.generateAuthInterceptor(parser);
+
     return {
       profile_name: profileName,
       description: `Auto-generated default profile with ${tools.length} tools from OpenAPI spec`,
       tools,
-      interceptors: {},
+      interceptors,
     };
+  }
+
+  /**
+   * Generate auth interceptor from OpenAPI security scheme
+   * 
+   * Strategy:
+   * 1. Parse security scheme from OpenAPI spec
+   * 2. If not found, check for force auth override via env vars
+   * 3. Map to profile auth interceptor format
+   * 4. Use env var name from AUTH_ENV_VAR or default to API_TOKEN
+   * 
+   * Returns empty object if no security scheme found (public API) and no force override
+   */
+  private static generateAuthInterceptor(parser: OpenAPIParser): import('./types/profile.js').InterceptorConfig {
+    const securityScheme = parser.getSecurityScheme();
+    
+    // Check for force auth override (for APIs with incomplete OpenAPI spec)
+    const forceAuth = process.env.AUTH_FORCE === 'true';
+    
+    if (!securityScheme && !forceAuth) {
+      return {}; // Public API, no auth required
+    }
+
+    // Get env var name from environment or use default
+    const envVarName = process.env.AUTH_ENV_VAR || 'API_TOKEN';
+
+    const interceptors: import('./types/profile.js').InterceptorConfig = {};
+
+    // If force auth is enabled, use env config instead of OpenAPI spec
+    if (forceAuth && !securityScheme) {
+      const authType = (process.env.AUTH_TYPE || 'bearer').toLowerCase();
+      
+      switch (authType) {
+        case 'bearer':
+          interceptors.auth = {
+            type: 'bearer',
+            value_from_env: envVarName,
+          };
+          break;
+        
+        case 'query':
+          const queryParam = process.env.AUTH_QUERY_PARAM;
+          if (!queryParam) {
+            throw new ConfigurationError(
+              'AUTH_QUERY_PARAM is required when AUTH_TYPE=query',
+              { authType }
+            );
+          }
+          interceptors.auth = {
+            type: 'query',
+            query_param: queryParam,
+            value_from_env: envVarName,
+          };
+          break;
+        
+        case 'custom-header':
+          const headerName = process.env.AUTH_HEADER_NAME;
+          if (!headerName) {
+            throw new ConfigurationError(
+              'AUTH_HEADER_NAME is required when AUTH_TYPE=custom-header',
+              { authType }
+            );
+          }
+          interceptors.auth = {
+            type: 'custom-header',
+            header_name: headerName,
+            value_from_env: envVarName,
+          };
+          break;
+        
+        default:
+          throw new ConfigurationError(
+            `Invalid AUTH_TYPE: ${authType}. Must be one of: bearer, query, custom-header`,
+            { authType }
+          );
+      }
+      
+      return interceptors;
+    }
+
+    // Use OpenAPI security scheme
+    if (!securityScheme) {
+      return {}; // Shouldn't happen, but TypeScript needs this
+    }
+
+    switch (securityScheme.type) {
+      case 'bearer':
+        // Bearer token in Authorization header
+        interceptors.auth = {
+          type: 'bearer',
+          value_from_env: envVarName,
+        };
+        break;
+
+      case 'apiKey':
+        // API key in header or query
+        if (securityScheme.in === 'query' && securityScheme.name) {
+          interceptors.auth = {
+            type: 'query',
+            query_param: securityScheme.name,
+            value_from_env: envVarName,
+          };
+        } else if (securityScheme.in === 'header' && securityScheme.name) {
+          // Check if it's a standard Authorization header
+          if (securityScheme.name.toLowerCase() === 'authorization') {
+            interceptors.auth = {
+              type: 'bearer',
+              value_from_env: envVarName,
+            };
+          } else {
+            interceptors.auth = {
+              type: 'custom-header',
+              header_name: securityScheme.name,
+              value_from_env: envVarName,
+            };
+          }
+        }
+        break;
+
+      default:
+        // Unknown security type, default to bearer
+        interceptors.auth = {
+          type: 'bearer',
+          value_from_env: envVarName,
+        };
+    }
+
+    return interceptors;
   }
 
   /**

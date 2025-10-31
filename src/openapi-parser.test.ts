@@ -66,5 +66,146 @@ describe('OpenAPIParser', () => {
     const badgeOps = operations.filter(op => op.tags?.includes('badges'));
     expect(badgeOps.length).toBeGreaterThan(0);
   });
+
+  it('should extract security scheme from GitLab spec', () => {
+    const security = parser.getSecurityScheme();
+    expect(security).toBeDefined();
+    // GitLab uses apiKey in header (PRIVATE-TOKEN)
+    expect(['bearer', 'apiKey']).toContain(security?.type);
+  });
+});
+
+describe('OpenAPIParser - Security Schemes', () => {
+  it('should parse bearer token auth', async () => {
+    const parser = new OpenAPIParser();
+    
+    // Mock spec with bearer auth directly without loading file
+    (parser as any).spec = {
+      openapi: '3.0.0',
+      info: { title: 'Test API', version: '1.0' },
+      security: [{ bearerAuth: [] }],
+      components: {
+        securitySchemes: {
+          bearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+          },
+        },
+      },
+      paths: {},
+    };
+    (parser as any).buildIndex();
+
+    const security = parser.getSecurityScheme();
+    expect(security).toEqual({
+      type: 'bearer',
+      scheme: 'bearer',
+    });
+  });
+
+  it('should parse API key in header', async () => {
+    const parser = new OpenAPIParser();
+    await parser.load('test-spec.yaml').catch(() => {});
+    
+    (parser as any).spec = {
+      openapi: '3.0.0',
+      info: { title: 'Test API', version: '1.0' },
+      security: [{ apiKeyAuth: [] }],
+      components: {
+        securitySchemes: {
+          apiKeyAuth: {
+            type: 'apiKey',
+            name: 'X-API-Key',
+            in: 'header',
+          },
+        },
+      },
+      paths: {},
+    };
+    (parser as any).buildIndex();
+
+    const security = parser.getSecurityScheme();
+    expect(security).toEqual({
+      type: 'apiKey',
+      name: 'X-API-Key',
+      in: 'header',
+    });
+  });
+
+  it('should parse API key in query', async () => {
+    const parser = new OpenAPIParser();
+    await parser.load('test-spec.yaml').catch(() => {});
+    
+    (parser as any).spec = {
+      openapi: '3.0.0',
+      info: { title: 'Test API', version: '1.0' },
+      security: [{ apiKeyAuth: [] }],
+      components: {
+        securitySchemes: {
+          apiKeyAuth: {
+            type: 'apiKey',
+            name: 'api_key',
+            in: 'query',
+          },
+        },
+      },
+      paths: {},
+    };
+    (parser as any).buildIndex();
+
+    const security = parser.getSecurityScheme();
+    expect(security).toEqual({
+      type: 'apiKey',
+      name: 'api_key',
+      in: 'query',
+    });
+  });
+
+  it('should return undefined for public API (no security)', async () => {
+    const parser = new OpenAPIParser();
+    await parser.load('test-spec.yaml').catch(() => {});
+    
+    (parser as any).spec = {
+      openapi: '3.0.0',
+      info: { title: 'Test API', version: '1.0' },
+      paths: {},
+    };
+    (parser as any).buildIndex();
+
+    const security = parser.getSecurityScheme();
+    expect(security).toBeUndefined();
+  });
+
+  it('should map OAuth2 to bearer', async () => {
+    const parser = new OpenAPIParser();
+    await parser.load('test-spec.yaml').catch(() => {});
+    
+    (parser as any).spec = {
+      openapi: '3.0.0',
+      info: { title: 'Test API', version: '1.0' },
+      security: [{ oauth2: [] }],
+      components: {
+        securitySchemes: {
+          oauth2: {
+            type: 'oauth2',
+            flows: {
+              implicit: {
+                authorizationUrl: 'https://example.com/oauth',
+                scopes: {},
+              },
+            },
+          },
+        },
+      },
+      paths: {},
+    };
+    (parser as any).buildIndex();
+
+    const security = parser.getSecurityScheme();
+    expect(security).toEqual({
+      type: 'bearer',
+      scheme: 'bearer',
+    });
+  });
 });
 

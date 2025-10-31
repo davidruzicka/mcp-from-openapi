@@ -220,6 +220,488 @@ describe('ProfileLoader', () => {
     expect(profile.description).toContain('Auto-generated default profile');
   });
 
+  it('should create default profile with auth from OpenAPI security', async () => {
+    const parser = new (await import('./openapi-parser.js')).OpenAPIParser();
+    await parser.load('profiles/gitlab/openapi.yaml');
+    
+    const profile = ProfileLoader.createDefaultProfile('my-api', parser);
+    
+    // GitLab spec has security defined
+    expect(profile.interceptors).toBeDefined();
+    expect(profile.interceptors?.auth).toBeDefined();
+    expect(profile.interceptors?.auth?.value_from_env).toBe('API_TOKEN');
+  });
+
+  it('should create default profile with bearer auth for bearer security scheme', async () => {
+    const parser = new (await import('./openapi-parser.js')).OpenAPIParser();
+    
+    // Mock OpenAPI spec with bearer auth
+    (parser as any).spec = {
+      openapi: '3.0.0',
+      info: { title: 'Test API', version: '1.0' },
+      security: [{ bearerAuth: [] }],
+      components: {
+        securitySchemes: {
+          bearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+          },
+        },
+      },
+      paths: {
+        '/test': {
+          get: {
+            operationId: 'getTest',
+            summary: 'Get test',
+            responses: { '200': { description: 'OK' } },
+          },
+        },
+      },
+    };
+    (parser as any).buildIndex();
+    
+    const profile = ProfileLoader.createDefaultProfile('test-api', parser);
+    
+    expect(profile.interceptors?.auth).toEqual({
+      type: 'bearer',
+      value_from_env: 'API_TOKEN',
+    });
+  });
+
+  it('should create default profile with custom header auth for apiKey in header', async () => {
+    const parser = new (await import('./openapi-parser.js')).OpenAPIParser();
+    
+    // Mock OpenAPI spec with apiKey in header
+    (parser as any).spec = {
+      openapi: '3.0.0',
+      info: { title: 'Test API', version: '1.0' },
+      security: [{ apiKeyAuth: [] }],
+      components: {
+        securitySchemes: {
+          apiKeyAuth: {
+            type: 'apiKey',
+            name: 'X-API-Key',
+            in: 'header',
+          },
+        },
+      },
+      paths: {
+        '/test': {
+          get: {
+            operationId: 'getTest',
+            summary: 'Get test',
+            responses: { '200': { description: 'OK' } },
+          },
+        },
+      },
+    };
+    (parser as any).buildIndex();
+    
+    const profile = ProfileLoader.createDefaultProfile('test-api', parser);
+    
+    expect(profile.interceptors?.auth).toEqual({
+      type: 'custom-header',
+      header_name: 'X-API-Key',
+      value_from_env: 'API_TOKEN',
+    });
+  });
+
+  it('should create default profile with query auth for apiKey in query', async () => {
+    const parser = new (await import('./openapi-parser.js')).OpenAPIParser();
+    
+    // Mock OpenAPI spec with apiKey in query
+    (parser as any).spec = {
+      openapi: '3.0.0',
+      info: { title: 'Test API', version: '1.0' },
+      security: [{ apiKeyAuth: [] }],
+      components: {
+        securitySchemes: {
+          apiKeyAuth: {
+            type: 'apiKey',
+            name: 'api_key',
+            in: 'query',
+          },
+        },
+      },
+      paths: {
+        '/test': {
+          get: {
+            operationId: 'getTest',
+            summary: 'Get test',
+            responses: { '200': { description: 'OK' } },
+          },
+        },
+      },
+    };
+    (parser as any).buildIndex();
+    
+    const profile = ProfileLoader.createDefaultProfile('test-api', parser);
+    
+    expect(profile.interceptors?.auth).toEqual({
+      type: 'query',
+      query_param: 'api_key',
+      value_from_env: 'API_TOKEN',
+    });
+  });
+
+  it('should create default profile without auth for public API', async () => {
+    const parser = new (await import('./openapi-parser.js')).OpenAPIParser();
+    
+    // Mock OpenAPI spec without security
+    (parser as any).spec = {
+      openapi: '3.0.0',
+      info: { title: 'Public API', version: '1.0' },
+      paths: {
+        '/test': {
+          get: {
+            operationId: 'getTest',
+            summary: 'Get test',
+            responses: { '200': { description: 'OK' } },
+          },
+        },
+      },
+    };
+    (parser as any).buildIndex();
+    
+    const profile = ProfileLoader.createDefaultProfile('public-api', parser);
+    
+    expect(profile.interceptors).toEqual({});
+  });
+
+  it('should use custom AUTH_ENV_VAR if set', async () => {
+    const parser = new (await import('./openapi-parser.js')).OpenAPIParser();
+    
+    // Mock OpenAPI spec with bearer auth
+    (parser as any).spec = {
+      openapi: '3.0.0',
+      info: { title: 'Test API', version: '1.0' },
+      security: [{ bearerAuth: [] }],
+      components: {
+        securitySchemes: {
+          bearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+          },
+        },
+      },
+      paths: {
+        '/test': {
+          get: {
+            operationId: 'getTest',
+            summary: 'Get test',
+            responses: { '200': { description: 'OK' } },
+          },
+        },
+      },
+    };
+    (parser as any).buildIndex();
+    
+    const oldEnvVar = process.env.AUTH_ENV_VAR;
+    process.env.AUTH_ENV_VAR = 'MY_CUSTOM_TOKEN';
+    
+    try {
+      const profile = ProfileLoader.createDefaultProfile('test-api', parser);
+      
+      expect(profile.interceptors?.auth?.value_from_env).toBe('MY_CUSTOM_TOKEN');
+    } finally {
+      if (oldEnvVar !== undefined) {
+        process.env.AUTH_ENV_VAR = oldEnvVar;
+      } else {
+        delete process.env.AUTH_ENV_VAR;
+      }
+    }
+  });
+
+  describe('Force authentication override', () => {
+    it('should force bearer auth when AUTH_FORCE=true', async () => {
+      const parser = new (await import('./openapi-parser.js')).OpenAPIParser();
+      
+      // Mock OpenAPI spec WITHOUT security
+      (parser as any).spec = {
+        openapi: '3.0.0',
+        info: { title: 'Public API', version: '1.0' },
+        paths: {
+          '/test': {
+            get: {
+              operationId: 'getTest',
+              summary: 'Get test',
+              responses: { '200': { description: 'OK' } },
+            },
+          },
+        },
+      };
+      (parser as any).buildIndex();
+      
+      const oldForce = process.env.AUTH_FORCE;
+      const oldType = process.env.AUTH_TYPE;
+      process.env.AUTH_FORCE = 'true';
+      process.env.AUTH_TYPE = 'bearer';
+      
+      try {
+        const profile = ProfileLoader.createDefaultProfile('test-api', parser);
+        
+        expect(profile.interceptors?.auth).toEqual({
+          type: 'bearer',
+          value_from_env: 'API_TOKEN',
+        });
+      } finally {
+        if (oldForce !== undefined) process.env.AUTH_FORCE = oldForce;
+        else delete process.env.AUTH_FORCE;
+        if (oldType !== undefined) process.env.AUTH_TYPE = oldType;
+        else delete process.env.AUTH_TYPE;
+      }
+    });
+
+    it('should force query auth when AUTH_FORCE=true and AUTH_TYPE=query', async () => {
+      const parser = new (await import('./openapi-parser.js')).OpenAPIParser();
+      
+      (parser as any).spec = {
+        openapi: '3.0.0',
+        info: { title: 'Public API', version: '1.0' },
+        paths: {
+          '/test': {
+            get: {
+              operationId: 'getTest',
+              summary: 'Get test',
+              responses: { '200': { description: 'OK' } },
+            },
+          },
+        },
+      };
+      (parser as any).buildIndex();
+      
+      const oldForce = process.env.AUTH_FORCE;
+      const oldType = process.env.AUTH_TYPE;
+      const oldParam = process.env.AUTH_QUERY_PARAM;
+      process.env.AUTH_FORCE = 'true';
+      process.env.AUTH_TYPE = 'query';
+      process.env.AUTH_QUERY_PARAM = 'api_key';
+      
+      try {
+        const profile = ProfileLoader.createDefaultProfile('test-api', parser);
+        
+        expect(profile.interceptors?.auth).toEqual({
+          type: 'query',
+          query_param: 'api_key',
+          value_from_env: 'API_TOKEN',
+        });
+      } finally {
+        if (oldForce !== undefined) process.env.AUTH_FORCE = oldForce;
+        else delete process.env.AUTH_FORCE;
+        if (oldType !== undefined) process.env.AUTH_TYPE = oldType;
+        else delete process.env.AUTH_TYPE;
+        if (oldParam !== undefined) process.env.AUTH_QUERY_PARAM = oldParam;
+        else delete process.env.AUTH_QUERY_PARAM;
+      }
+    });
+
+    it('should force custom-header auth when AUTH_FORCE=true and AUTH_TYPE=custom-header', async () => {
+      const parser = new (await import('./openapi-parser.js')).OpenAPIParser();
+      
+      (parser as any).spec = {
+        openapi: '3.0.0',
+        info: { title: 'Public API', version: '1.0' },
+        paths: {
+          '/test': {
+            get: {
+              operationId: 'getTest',
+              summary: 'Get test',
+              responses: { '200': { description: 'OK' } },
+            },
+          },
+        },
+      };
+      (parser as any).buildIndex();
+      
+      const oldForce = process.env.AUTH_FORCE;
+      const oldType = process.env.AUTH_TYPE;
+      const oldHeader = process.env.AUTH_HEADER_NAME;
+      process.env.AUTH_FORCE = 'true';
+      process.env.AUTH_TYPE = 'custom-header';
+      process.env.AUTH_HEADER_NAME = 'X-Custom-Auth';
+      
+      try {
+        const profile = ProfileLoader.createDefaultProfile('test-api', parser);
+        
+        expect(profile.interceptors?.auth).toEqual({
+          type: 'custom-header',
+          header_name: 'X-Custom-Auth',
+          value_from_env: 'API_TOKEN',
+        });
+      } finally {
+        if (oldForce !== undefined) process.env.AUTH_FORCE = oldForce;
+        else delete process.env.AUTH_FORCE;
+        if (oldType !== undefined) process.env.AUTH_TYPE = oldType;
+        else delete process.env.AUTH_TYPE;
+        if (oldHeader !== undefined) process.env.AUTH_HEADER_NAME = oldHeader;
+        else delete process.env.AUTH_HEADER_NAME;
+      }
+    });
+
+    it('should throw error when AUTH_TYPE=query but AUTH_QUERY_PARAM is missing', async () => {
+      const parser = new (await import('./openapi-parser.js')).OpenAPIParser();
+      
+      (parser as any).spec = {
+        openapi: '3.0.0',
+        info: { title: 'Public API', version: '1.0' },
+        paths: {
+          '/test': {
+            get: {
+              operationId: 'getTest',
+              summary: 'Get test',
+              responses: { '200': { description: 'OK' } },
+            },
+          },
+        },
+      };
+      (parser as any).buildIndex();
+      
+      const oldForce = process.env.AUTH_FORCE;
+      const oldType = process.env.AUTH_TYPE;
+      const oldParam = process.env.AUTH_QUERY_PARAM;
+      process.env.AUTH_FORCE = 'true';
+      process.env.AUTH_TYPE = 'query';
+      delete process.env.AUTH_QUERY_PARAM;
+      
+      try {
+        expect(() => ProfileLoader.createDefaultProfile('test-api', parser))
+          .toThrow('AUTH_QUERY_PARAM is required when AUTH_TYPE=query');
+      } finally {
+        if (oldForce !== undefined) process.env.AUTH_FORCE = oldForce;
+        else delete process.env.AUTH_FORCE;
+        if (oldType !== undefined) process.env.AUTH_TYPE = oldType;
+        else delete process.env.AUTH_TYPE;
+        if (oldParam !== undefined) process.env.AUTH_QUERY_PARAM = oldParam;
+        else delete process.env.AUTH_QUERY_PARAM;
+      }
+    });
+
+    it('should throw error when AUTH_TYPE=custom-header but AUTH_HEADER_NAME is missing', async () => {
+      const parser = new (await import('./openapi-parser.js')).OpenAPIParser();
+      
+      (parser as any).spec = {
+        openapi: '3.0.0',
+        info: { title: 'Public API', version: '1.0' },
+        paths: {
+          '/test': {
+            get: {
+              operationId: 'getTest',
+              summary: 'Get test',
+              responses: { '200': { description: 'OK' } },
+            },
+          },
+        },
+      };
+      (parser as any).buildIndex();
+      
+      const oldForce = process.env.AUTH_FORCE;
+      const oldType = process.env.AUTH_TYPE;
+      const oldHeader = process.env.AUTH_HEADER_NAME;
+      process.env.AUTH_FORCE = 'true';
+      process.env.AUTH_TYPE = 'custom-header';
+      delete process.env.AUTH_HEADER_NAME;
+      
+      try {
+        expect(() => ProfileLoader.createDefaultProfile('test-api', parser))
+          .toThrow('AUTH_HEADER_NAME is required when AUTH_TYPE=custom-header');
+      } finally {
+        if (oldForce !== undefined) process.env.AUTH_FORCE = oldForce;
+        else delete process.env.AUTH_FORCE;
+        if (oldType !== undefined) process.env.AUTH_TYPE = oldType;
+        else delete process.env.AUTH_TYPE;
+        if (oldHeader !== undefined) process.env.AUTH_HEADER_NAME = oldHeader;
+        else delete process.env.AUTH_HEADER_NAME;
+      }
+    });
+
+    it('should throw error for invalid AUTH_TYPE', async () => {
+      const parser = new (await import('./openapi-parser.js')).OpenAPIParser();
+      
+      (parser as any).spec = {
+        openapi: '3.0.0',
+        info: { title: 'Public API', version: '1.0' },
+        paths: {
+          '/test': {
+            get: {
+              operationId: 'getTest',
+              summary: 'Get test',
+              responses: { '200': { description: 'OK' } },
+            },
+          },
+        },
+      };
+      (parser as any).buildIndex();
+      
+      const oldForce = process.env.AUTH_FORCE;
+      const oldType = process.env.AUTH_TYPE;
+      process.env.AUTH_FORCE = 'true';
+      process.env.AUTH_TYPE = 'invalid-type';
+      
+      try {
+        expect(() => ProfileLoader.createDefaultProfile('test-api', parser))
+          .toThrow('Invalid AUTH_TYPE: invalid-type');
+      } finally {
+        if (oldForce !== undefined) process.env.AUTH_FORCE = oldForce;
+        else delete process.env.AUTH_FORCE;
+        if (oldType !== undefined) process.env.AUTH_TYPE = oldType;
+        else delete process.env.AUTH_TYPE;
+      }
+    });
+
+    it('should prefer OpenAPI security over force auth when both exist', async () => {
+      const parser = new (await import('./openapi-parser.js')).OpenAPIParser();
+      
+      // Mock OpenAPI spec WITH security
+      (parser as any).spec = {
+        openapi: '3.0.0',
+        info: { title: 'Test API', version: '1.0' },
+        security: [{ bearerAuth: [] }],
+        components: {
+          securitySchemes: {
+            bearerAuth: {
+              type: 'http',
+              scheme: 'bearer',
+            },
+          },
+        },
+        paths: {
+          '/test': {
+            get: {
+              operationId: 'getTest',
+              summary: 'Get test',
+              responses: { '200': { description: 'OK' } },
+            },
+          },
+        },
+      };
+      (parser as any).buildIndex();
+      
+      const oldForce = process.env.AUTH_FORCE;
+      const oldType = process.env.AUTH_TYPE;
+      const oldHeader = process.env.AUTH_HEADER_NAME;
+      process.env.AUTH_FORCE = 'true';
+      process.env.AUTH_TYPE = 'custom-header';
+      process.env.AUTH_HEADER_NAME = 'X-Custom';
+      
+      try {
+        const profile = ProfileLoader.createDefaultProfile('test-api', parser);
+        
+        // Should use OpenAPI security (bearer), not force config (custom-header)
+        expect(profile.interceptors?.auth).toEqual({
+          type: 'bearer',
+          value_from_env: 'API_TOKEN',
+        });
+      } finally {
+        if (oldForce !== undefined) process.env.AUTH_FORCE = oldForce;
+        else delete process.env.AUTH_FORCE;
+        if (oldType !== undefined) process.env.AUTH_TYPE = oldType;
+        else delete process.env.AUTH_TYPE;
+        if (oldHeader !== undefined) process.env.AUTH_HEADER_NAME = oldHeader;
+        else delete process.env.AUTH_HEADER_NAME;
+      }
+    });
+  });
+
   it('should shorten tool names when strategy is configured', async () => {
     const parser = new (await import('./openapi-parser.js')).OpenAPIParser();
     await parser.load('profiles/gitlab/openapi.yaml');
@@ -450,7 +932,8 @@ describe('ProfileLoader', () => {
           parameters: params,
           summary: 'Many params',
         }];
-      }
+      },
+      getSecurityScheme: () => undefined, // Public API
     };
 
     const profile = ProfileLoader.createDefaultProfile('test', fakeParser);

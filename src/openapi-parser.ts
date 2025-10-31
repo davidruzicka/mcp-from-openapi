@@ -187,5 +187,66 @@ export class OpenAPIParser {
   getAllOperations(): OperationInfo[] {
     return Array.from(this.index?.operations.values() || []);
   }
+
+  /**
+   * Get first security scheme from OpenAPI spec
+   * 
+   * Why: When no profile is provided, we need to infer auth configuration from OpenAPI spec.
+   * Returns the first security scheme defined in spec.security or components.securitySchemes.
+   * 
+   * Returns undefined if no security is defined (public API).
+   */
+  getSecurityScheme(): { type: string; scheme?: string; name?: string; in?: string } | undefined {
+    if (!this.spec) return undefined;
+
+    // Check if security is required at spec level
+    const globalSecurity = this.spec.security;
+    if (!globalSecurity || globalSecurity.length === 0) {
+      return undefined; // No security required
+    }
+
+    // Get first security requirement
+    const firstSecurityReq = globalSecurity[0];
+    const securitySchemeName = Object.keys(firstSecurityReq)[0];
+    if (!securitySchemeName) return undefined;
+
+    // Resolve security scheme definition
+    const securitySchemes = this.spec.components?.securitySchemes;
+    if (!securitySchemes) return undefined;
+
+    const scheme = securitySchemes[securitySchemeName];
+    if (!scheme || '$ref' in scheme) return undefined;
+
+    // Map OpenAPI security scheme to our auth config format
+    const schemeObj = scheme as OpenAPIV3.SecuritySchemeObject;
+    
+    switch (schemeObj.type) {
+      case 'http':
+        // http: bearer, basic, etc.
+        return {
+          type: schemeObj.scheme || 'bearer',
+          scheme: schemeObj.scheme,
+        };
+      
+      case 'apiKey':
+        // apiKey: in header, query, or cookie
+        return {
+          type: 'apiKey',
+          name: schemeObj.name,
+          in: schemeObj.in,
+        };
+      
+      case 'oauth2':
+      case 'openIdConnect':
+        // OAuth2/OIDC typically use bearer tokens
+        return {
+          type: 'bearer',
+          scheme: 'bearer',
+        };
+      
+      default:
+        return undefined;
+    }
+  }
 }
 

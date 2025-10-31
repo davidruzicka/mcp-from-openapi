@@ -105,12 +105,63 @@ See [docs/HTTP-TRANSPORT.md](./docs/HTTP-TRANSPORT.md) for transport options (st
 
 ### Required
 - `OPENAPI_SPEC_PATH`: Path to OpenAPI spec (YAML/JSON)
-- `API_TOKEN`: API token (required for stdio, optional for HTTP with per-session tokens)
+- `API_TOKEN`: API token (default env var name; customizable via `AUTH_ENV_VAR`)
+  - **Required for stdio** mode with authenticated APIs
+  - **Optional for HTTP** mode with per-session tokens
+  - When using no profile mode, auth type is auto-detected from OpenAPI `security` schemes
 
 ### Optional - Core
 - `MCP_PROFILE_PATH`: Profile JSON path (default: auto-generate tools from OpenAPI spec; warning logged if tool exceeds 60 parameters)
 - `MCP_TRANSPORT`: `stdio` (default) or `http`
 - `API_BASE_URL`: Override OpenAPI server URL
+
+### Optional - Authentication (No-Profile Mode)
+When running without a profile, authentication is automatically configured from OpenAPI spec's `security` schemes:
+
+- `AUTH_ENV_VAR`: Environment variable name for auth token (default: `API_TOKEN`)
+
+**Supported OpenAPI Security Types:**
+- **Bearer Token** (`http` with `scheme: bearer`): Uses `Authorization: Bearer <token>` header
+- **API Key in Header** (`apiKey` with `in: header`): Uses custom header (e.g., `X-API-Key: <token>`)
+- **API Key in Query** (`apiKey` with `in: query`): Adds token to query string (e.g., `?api_key=<token>`)
+- **OAuth2/OpenID Connect**: Mapped to bearer token authentication
+- **Public APIs**: No authentication if OpenAPI spec has no `security` defined
+
+**Example**: Use custom env var for GitLab token:
+```bash
+export AUTH_ENV_VAR=GITLAB_TOKEN
+export GITLAB_TOKEN=glpat-xxxxxxxxxxxx
+export OPENAPI_SPEC_PATH=./openapi.yaml
+npm start
+```
+
+#### Force Authentication Override
+For APIs with incomplete OpenAPI specs (missing `security` definition but requiring authentication):
+
+- `AUTH_FORCE`: Enable force auth override (`true|false`, default: `false`)
+- `AUTH_TYPE`: Authentication type: `bearer|query|custom-header` (default: `bearer`)
+- `AUTH_HEADER_NAME`: Custom header name (required when `AUTH_TYPE=custom-header`)
+- `AUTH_QUERY_PARAM`: Query parameter name (required when `AUTH_TYPE=query`)
+
+**Example**: Force bearer authentication for incomplete spec:
+```bash
+export AUTH_FORCE=true
+export AUTH_TYPE=bearer
+export API_TOKEN=your_token_here
+export OPENAPI_SPEC_PATH=./incomplete-spec.yaml
+npm start
+```
+
+**Example**: Force custom header authentication:
+```bash
+export AUTH_FORCE=true
+export AUTH_TYPE=custom-header
+export AUTH_HEADER_NAME=X-API-Key
+export API_TOKEN=your_api_key_here
+npm start
+```
+
+**Note**: If OpenAPI spec has `security` defined, it takes precedence over force auth settings.
 
 ### Optional - Tool Name Shortening
 When generating tools from OpenAPI without a profile, long operation IDs may exceed limits. Configure automatic shortening:
