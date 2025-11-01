@@ -107,7 +107,7 @@ export DEFAULT_PROFILE_EXCLUDE_TAGS="admin,system"
 
 **Files to modify**:
 - `src/profile-loader.ts` - filter operations in `createDefaultProfile()`
-- `README.md`, `USAGE.md` - document env variables
+- `README.md` - document env variables
 
 **Estimated effort**: 
 - Whitelist: 1 hour
