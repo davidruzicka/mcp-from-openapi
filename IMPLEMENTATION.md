@@ -21,7 +21,7 @@
          │            - Validates profile JSON with Zod (auto-generated)
          │            - Checks semantic rules
          │            - Default profile generation
-         │            ✅ Zod schemas auto-generated from TypeScript types
+         │            - Zod schemas auto-generated from TypeScript types
          │
          ├──────────► Tool Generator (tool-generator.ts)
          │            - Generates MCP tools from profile
@@ -69,8 +69,8 @@
 - `manage_access_requests` → 8 operations (project + group)
 
 **Trade-off**:
-- ✅ 85% reduction in tool count
-- ✅ Less context pollution for LLM
+- Massive reduction in tool count
+- Less context pollution for LLM
 - ⚠️ Slightly more complex parameter validation
 
 ### 2. Profile-Driven Configuration
@@ -183,7 +183,7 @@
 - POST `/mcp` - client→server messages (JSON-RPC)
 - GET `/mcp` - server→client messages (SSE stream)
 - DELETE `/mcp` - session termination
-- Session management with UUID, 30min timeout
+- Session management with UUID, 30min timeout default
 - SSE resumability via `Last-Event-ID`
 - Optional heartbeat for reverse proxy keepalive
 - Origin validation (DNS rebinding protection)
@@ -238,7 +238,7 @@ docs/
 
 ## Test Coverage (261 tests, 100% passing)
 
-✅ **Unit Tests** (123 tests):
+### **Unit Tests** (123 tests):
 - **OpenAPI Parser** (8 tests) - spec parsing, $ref resolution
 - **Profile Loader** (9 tests) - validation, logic checks, operation keys validation
 - **Tool Generator** (7 tests) - MCP tool generation, JSON schema
@@ -252,15 +252,15 @@ docs/
 - **JSON-RPC Validator** (5 tests) - message type validation
 - **Validation Utils** (2 tests) - email and URI validation
 
-✅ **Integration Tests** (30 tests):
+### **Integration Tests** (30 tests):
 - **GitLab API** (21 tests) - badges, branches, access requests, jobs
 - **HTTP Protocol** (9 tests) - full request/response cycle, tool execution
 
-✅ **Validation Tests** (19 tests):
+### **Validation Tests** (19 tests):
 - **Profile Schema** (10 tests) - JSON Schema validation, compilation
 - **Validation CLI** (9 tests) - profile validation script
 
-✅ **Test Utilities** (19 tests):
+### **Test Utilities** (19 tests):
 - **Mock Utils** (12 tests) - URL parsing, pagination utilities
 - **Test HTTP Utils** (7 tests) - HTTP client test setup, mocking
 
@@ -290,7 +290,7 @@ docs/
 
 ## Production Readiness
 
-### ✅ P0 Features (Complete)
+### P0 Features (Complete)
 
 **1. Pluggable Logger**
 - `Logger` interface with `ConsoleLogger` and `JsonLogger`
@@ -315,7 +315,7 @@ docs/
 - Format validation (email, URI)
 - Clear error messages with JSONPath
 
-### ✅ HTTP Transport (Complete)
+### HTTP Transport (Complete)
 
 **MCP Specification 2025-03-26 Compliant**
 - POST/GET/DELETE endpoints
@@ -333,7 +333,7 @@ docs/
 - Wildcard subdomains (`*.company.com`)
 - Session timeout enforcement
 
-### ✅ Prometheus Metrics (Complete)
+### Prometheus Metrics (Complete)
 
 **Metrics Endpoint** (`/metrics`):
 - HTTP requests (total, duration, by method/path/status)
@@ -406,7 +406,7 @@ See [TODO.md](./TODO.md) for detailed implementation plans.
 
 3. **Zod Schemas** (`src/generated-schemas.ts`)
    - **Auto-generated runtime validation and parsing**
-   - **✅ Generated from TypeScript types via `npm run generate-schemas`**
+   - **Generated from TypeScript types via `npm run generate-schemas`**
    - Used during profile loading
 
 **Why Zod can break your features:**

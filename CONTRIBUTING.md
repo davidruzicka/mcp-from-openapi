@@ -39,7 +39,7 @@ Thank you for considering contributing! This document provides guidelines for de
 
 ## Testing
 
-- Write tests for new features
+- Write tests for new important features
 - Maintain test coverage above 80%
 - Run `npm test` before submitting PR
 - Integration tests in `src/testing/`
@@ -49,9 +49,9 @@ Thank you for considering contributing! This document provides guidelines for de
 
 **When modifying profile schema structure** (adding fields to `ToolDefinition` or `Profile`):
 
-### Three schemas MUST stay in sync:
+### Two schemas MUST stay in sync:
 
-1. **TypeScript Types** (`src/types/profile.ts`)
+1. **TypeScript Types** (`src/types/profile.ts`) - **Source of Truth**
    ```typescript
    export interface ToolDefinition {
      // ... existing fields ...
@@ -59,7 +59,7 @@ Thank you for considering contributing! This document provides guidelines for de
    }
    ```
 
-2. **JSON Schema** (`profile-schema.json`)
+2. **JSON Schema** (`profile-schema.json`) - **Manual Update Required**
    ```json
    {
      "properties": {
@@ -71,58 +71,40 @@ Thank you for considering contributing! This document provides guidelines for de
    }
    ```
 
-3. **⚠️ Zod Schema** (`src/profile-loader.ts`) - **MOST CRITICAL!**
-   ```typescript
-   const ToolDefSchema = z.object({
-     // ... existing fields ...
-     new_field: z.someType().optional(),
-   });
-   ```
+3. **Zod Schema** (`src/generated-schemas.ts`) - **Auto-generated**
+   - Automatically generated from TypeScript types
+   - Run `npm run generate-schemas` or `npm run build`
+   - No manual updates needed!
 
-### Why All Three?
+### Workflow
 
-- **TypeScript**: Compile-time type checking, IDE support
-- **JSON Schema**: Profile validation, IDE auto-complete for JSON files
-- **Zod Schema**: **Runtime validation** - missing field = silently dropped!
+1. **Edit** `src/types/profile.ts` (add/modify interface)
+2. **Run** `npm run generate-schemas` (auto-generates Zod schemas)
+3. **Update** `profile-schema.json` manually (for IDE autocomplete)
+4. **Test** with `npm test`
 
-### Common Bug Pattern
+### Why This Approach?
 
-```typescript
-// ✅ TypeScript type exists
-export interface ToolDefinition {
-  response_fields?: Record<string, string[]>;
-}
+- **TypeScript Types**: Single source of truth, compile-time checking
+- **JSON Schema**: Enhanced IDE autocomplete for `.json` files (better than generated)
+- **Zod Schema**: Runtime validation, auto-generated = always in sync!
 
-// ✅ JSON Schema exists
-{
-  "response_fields": { "type": "object" }
-}
+### Auto-Generation Details
 
-// ❌ Zod schema MISSING
-const ToolDefSchema = z.object({
-  // response_fields not listed!
-});
-
-// 💥 Result: profile.tools[0].response_fields === undefined at runtime
-// Even though TypeScript compiles and JSON validates!
-```
+The `npm run generate-schemas` script:
+- Uses `ts-to-zod` to convert TypeScript → Zod
+- Writes to `src/generated-schemas.ts`
+- Runs automatically during `npm run build`
+- Skips JSON Schema (maintained manually for better IDE experience)
 
 ### Debugging Checklist
 
 If a profile field is ignored at runtime:
 
-1. ✅ Check TypeScript interface in `src/types/profile.ts`
-2. ✅ Check JSON Schema in `profile-schema.json`
-3. ⚠️ **Check Zod schema in `src/profile-loader.ts`** ← Most likely culprit!
-
-### Why Zod Breaks Silently
-
-Zod runs in **strict mode** by default:
-- Unknown properties are **silently removed** during `parse()`
-- No errors, no warnings
-- TypeScript is happy (types match)
-- JSON validates (schema matches)
-- But the field never reaches runtime!
+1. Check TypeScript interface in `src/types/profile.ts`
+2. Run `npm run generate-schemas` to regenerate Zod schemas
+3. ⚠️ **Check JSON Schema in `profile-schema.json`** ← Manual updates may lag
+4. ⚠️ Check for custom Zod refinements in `src/profile-loader.ts` (edge cases)
 
 ## Architecture Overview
 
@@ -143,10 +125,11 @@ See [`IMPLEMENTATION.md`](./IMPLEMENTATION.md) for detailed architecture and des
 
 When adding features:
 
-- Update relevant docs in `docs/`
-- Add examples to profiles if applicable
 - Update `IMPLEMENTATION.md` for architectural changes
-- Keep `PROFILE-GUIDE.md` in sync with profile schema
+- Keep `docs/PROFILE-GUIDE.md` in sync with profile schema
+- Add or update examples in `profiles/` if applicable
+- Update relevant docs in `README.md` and other `docs/` files
+- Remove implemented feature from `TODO.md`
 
 ## Questions?
 
