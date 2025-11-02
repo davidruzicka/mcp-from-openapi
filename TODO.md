@@ -11,9 +11,10 @@
 - [P2: Maintenance and Code Quality](#p2-maintenance-and-code-quality)
   - [2. Validate Operations Keys in ProfileLoader](#2-validate-operations-keys-in-profileloader)
 - [P3: Nice-to-Have](#p3-nice-to-have)
-  - [3. OpenAPI Operation Filter for Default Profile](#3-openapi-operation-filter-for-default-profile)
-  - [4. Response Caching](#4-response-caching)
-  - [5. Request Deduplication](#5-request-deduplication)
+  - [3. Export Profile Command](#3-export-profile-command)
+  - [4. OpenAPI Operation Filter for Default Profile](#4-openapi-operation-filter-for-default-profile)
+  - [5. Response Caching](#5-response-caching)
+  - [6. Request Deduplication](#6-request-deduplication)
 
 ## P1: Correctness and Core Features
 
@@ -60,7 +61,46 @@
 
 ## P3: Nice-to-Have
 
-### 3. OpenAPI Operation Filter for Default Profile
+### 3. Export Profile Command
+**Goal**: Allow exporting auto-generated profile to file/stdout instead of using it directly.
+
+**Use cases**:
+- Generate starter profile for manual customization
+- Debug auto-generation logic
+- Version control profile alongside OpenAPI spec
+- Share profiles between team members
+
+**Implementation**:
+```bash
+# Export to file
+mcp4openapi export-profile \
+  --openapi-spec-path=api.yaml \
+  --mcp-profile-path=profile.json \
+  --mcp-toolname-strategy=balanced \
+  --mcp-toolname-max=45 \
+  --mcp-toolname-min-parts=3 \
+  --mcp-toolname-min-length=20
+
+# Export to stdout (for piping)
+mcp4openapi export-profile --openapi-spec-path=api.yaml
+```
+
+**Technical approach**:
+- Reuse existing `ProfileLoader.createDefaultProfile()` - no duplication!
+- Add CLI command parser (yargs or commander)
+- Add `src/cli-export.ts` for export logic
+- Support all naming strategies and options
+- Format JSON with 2-space indent
+
+**Files to modify**:
+- `src/cli-export.ts` (new) - export command implementation
+- `src/index.ts` - add command routing
+- `package.json` - add bin command `mcp4openapi-export`
+- `README.md` - document export command
+
+**Estimated effort**: 1-2 hours (mostly CLI parsing and formatting)
+
+### 4. OpenAPI Operation Filter for Default Profile
 **Current**: Without profile, all OpenAPI operations generate tools. Complex APIs may produce 100+ tools with parameter inflation warnings.
 
 **Goal**: Allow filtering operations when auto-generating default profile.
@@ -121,7 +161,7 @@ export DEFAULT_PROFILE_EXCLUDE_TAGS="admin,system"
 - Tag-based: 1-2 hours
 - Total (all three): 3-4 hours
 
-### 4. Response Caching
+### 5. Response Caching
 Add optional caching layer for idempotent GET requests:
 ```json
 {
@@ -137,7 +177,7 @@ Add optional caching layer for idempotent GET requests:
 
 **Estimated effort**: 3-4 hours
 
-### 5. Request Deduplication
+### 6. Request Deduplication
 Prevent multiple identical in-flight requests (thundering herd):
 - Hash request (method + URL + body)
 - If same request is pending, await existing promise
