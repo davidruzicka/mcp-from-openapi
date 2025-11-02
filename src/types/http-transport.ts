@@ -38,6 +38,10 @@ export interface HttpTransportConfig {
   metricsEnabled: boolean;
   metricsPath: string;
   allowedOrigins?: string[]; // Allowed origins/CIDR ranges
+  rateLimitEnabled?: boolean; // Enable rate limiting (default: true)
+  rateLimitWindowMs?: number; // Rate limit window in ms (default: 60000 = 1 min)
+  rateLimitMaxRequests?: number; // Max requests per window (default: 100)
+  rateLimitMetricsMax?: number; // Max requests for /metrics (default: 10)
 }
 
 export interface McpRequest extends ExpressRequest {

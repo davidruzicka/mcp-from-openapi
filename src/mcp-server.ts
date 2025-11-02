@@ -548,6 +548,10 @@ export class MCPServer {
       allowedOrigins: process.env.ALLOWED_ORIGINS
         ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
         : undefined,
+      rateLimitEnabled: process.env.HTTP_RATE_LIMIT_ENABLED !== 'false', // default: true
+      rateLimitWindowMs: parseInt(process.env.HTTP_RATE_LIMIT_WINDOW_MS || '60000', 10),
+      rateLimitMaxRequests: parseInt(process.env.HTTP_RATE_LIMIT_MAX_REQUESTS || '100', 10),
+      rateLimitMetricsMax: parseInt(process.env.HTTP_RATE_LIMIT_METRICS_MAX || '10', 10),
     };
 
     // Warn if binding to non-localhost without explicit ALLOWED_ORIGINS

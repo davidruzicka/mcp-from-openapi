@@ -11,6 +11,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import type { Server } from 'http';
 import crypto from 'crypto';
+import rateLimit from 'express-rate-limit';
 import type { Logger } from './logger.js';
 import type {
   SessionData,
@@ -52,7 +53,7 @@ export class HttpTransport {
   /**
    * Setup Express middleware
    * 
-   * Why: Security (Origin validation), JSON parsing, session extraction, metrics
+   * Why: Security (Origin validation, rate limiting), JSON parsing, session extraction, metrics
    */
   private setupMiddleware(): void {
     // JSON body parser
@@ -234,42 +235,93 @@ export class HttpTransport {
   private setupRoutes(): void {
     this.logger.info('Setting up HTTP routes');
 
+    // Security: Rate limiting setup
+    const rateLimitEnabled = this.config.rateLimitEnabled !== false; // default: true
+    const windowMs = this.config.rateLimitWindowMs || 60000; // 1 minute
+    const maxRequests = this.config.rateLimitMaxRequests || 100; // 100 req/min
+    const metricsMaxRequests = this.config.rateLimitMetricsMax || 10; // 10 req/min for metrics
+
+    if (rateLimitEnabled) {
+      this.logger.info('Rate limiting enabled', {
+        windowMs,
+        maxRequests,
+        metricsMaxRequests,
+      });
+    }
+
+    // Rate limiter for MCP/SSE endpoints (100 req/min by default)
+    const mcpRateLimiter = rateLimitEnabled ? rateLimit({
+      windowMs,
+      max: maxRequests,
+      standardHeaders: true, // Return rate limit info in `RateLimit-*` headers
+      legacyHeaders: false, // Disable `X-RateLimit-*` headers
+      handler: (req: Request, res: Response) => {
+        this.logger.warn('Rate limit exceeded', {
+          ip: req.ip,
+          path: req.path,
+          method: req.method,
+        });
+        res.status(429).json({
+          error: 'Too Many Requests',
+          message: `Rate limit exceeded. Max ${maxRequests} requests per ${windowMs / 1000} seconds.`,
+        });
+      },
+    }) : (req: Request, res: Response, next: NextFunction) => next();
+
+    // Rate limiter for metrics endpoint (10 req/min by default)
+    const metricsRateLimiter = rateLimitEnabled ? rateLimit({
+      windowMs,
+      max: metricsMaxRequests,
+      standardHeaders: true,
+      legacyHeaders: false,
+      handler: (req: Request, res: Response) => {
+        this.logger.warn('Rate limit exceeded for metrics', {
+          ip: req.ip,
+          path: req.path,
+        });
+        res.status(429).json({
+          error: 'Too Many Requests',
+          message: `Rate limit exceeded for metrics. Max ${metricsMaxRequests} requests per ${windowMs / 1000} seconds.`,
+        });
+      },
+    }) : (req: Request, res: Response, next: NextFunction) => next();
+
     // Main MCP endpoint - POST for sending messages
-    this.app.post('/mcp', this.handlePost.bind(this));
+    this.app.post('/mcp', mcpRateLimiter, this.handlePost.bind(this));
     this.logger.info('Registered POST /mcp route');
 
     // Main MCP endpoint - GET for SSE streaming
-    this.app.get('/mcp', this.handleGet.bind(this));
+    this.app.get('/mcp', mcpRateLimiter, this.handleGet.bind(this));
 
     // Session termination
-    this.app.delete('/mcp', this.handleDelete.bind(this));
+    this.app.delete('/mcp', mcpRateLimiter, this.handleDelete.bind(this));
 
     // Legacy alias endpoints - deprecated
-    // Why: Backward compatibility for clients using /sse
-    this.app.post('/sse', (req: Request, res: Response, next: NextFunction) => {
+    // Why: Backward compatibility for clients using /sse during migration
+    this.app.post('/sse', mcpRateLimiter, (req: Request, res: Response, next: NextFunction) => {
       this.logger.warn('Deprecated endpoint used: POST /sse. Please migrate to POST /mcp');
       this.logger.info('Handling POST /sse request');
       return (this.handlePost as any)(req, res, next);
     });
-    this.app.get('/sse', (req: Request, res: Response, next: NextFunction) => {
+    this.app.get('/sse', mcpRateLimiter, (req: Request, res: Response, next: NextFunction) => {
       console.log('=== SSE GET handler called for path:', req.path);
       this.logger.warn('Deprecated endpoint used: GET /sse. Please migrate to GET /mcp');
       this.logger.info(`Handling GET /sse request from: ${req.ip}`);
       return (this.handleGet as any)(req as any, res, next);
     });
     this.logger.info('Registered SSE routes: POST/GET/DELETE /sse');
-    this.app.delete('/sse', (req: Request, res: Response, next: NextFunction) => {
+    this.app.delete('/sse', mcpRateLimiter, (req: Request, res: Response, next: NextFunction) => {
       this.logger.warn('Deprecated endpoint used: DELETE /sse. Please migrate to DELETE /mcp');
       return (this.handleDelete as any)(req as any, res, next);
     });
 
     // Metrics endpoint (if enabled)
     if (this.config.metricsEnabled) {
-      this.app.get(this.config.metricsPath, this.handleMetrics.bind(this));
+      this.app.get(this.config.metricsPath, metricsRateLimiter, this.handleMetrics.bind(this));
     }
 
-    // Health check
-    this.app.get('/health', (req: Request, res: Response) => {
+    // Health check (with rate limiting)
+    this.app.get('/health', mcpRateLimiter, (req: Request, res: Response) => {
       const startTime = Date.now();
       res.json({ status: 'ok', sessions: this.sessions.size });
 

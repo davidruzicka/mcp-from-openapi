@@ -206,6 +206,35 @@ export MCP_TOOLNAME_MAX=30
 - `HEARTBEAT_ENABLED`: SSE heartbeat (default: `false`)
 - `HEARTBEAT_INTERVAL_MS`: Heartbeat interval (default: `30000` = 30s)
 
+#### HTTP Rate Limiting (Security)
+Protect against DoS attacks by limiting request rates per endpoint:
+
+- `HTTP_RATE_LIMIT_ENABLED`: Enable rate limiting (`true|false`, default: `true`)
+- `HTTP_RATE_LIMIT_WINDOW_MS`: Rate limit window in milliseconds (default: `60000` = 1 minute)
+- `HTTP_RATE_LIMIT_MAX_REQUESTS`: Max requests per window for `/mcp`, `/sse`, `/health` (default: `100`)
+- `HTTP_RATE_LIMIT_METRICS_MAX`: Max requests per window for `/metrics` (default: `10`)
+
+**Example**: Enable rate limiting with custom limits:
+```bash
+export HTTP_RATE_LIMIT_ENABLED=true
+export HTTP_RATE_LIMIT_MAX_REQUESTS=200    # 200 req/min for MCP endpoints
+export HTTP_RATE_LIMIT_METRICS_MAX=20      # 20 req/min for metrics
+```
+
+**Example**: Disable rate limiting (not recommended for production):
+```bash
+export HTTP_RATE_LIMIT_ENABLED=false
+```
+
+**Response when rate limit exceeded**:
+```json
+{
+  "error": "Too Many Requests",
+  "message": "Rate limit exceeded. Max 100 requests per 60 seconds."
+}
+```
+HTTP status: `429 Too Many Requests` with `RateLimit-*` headers.
+
 ### Optional - Observability
 - `LOG_LEVEL`: `debug`, `info` (default), `warn`, `error`
 - `LOG_FORMAT`: `console` (default) or `json`
