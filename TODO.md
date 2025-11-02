@@ -6,7 +6,7 @@
 
 ## Contents
 
-- [P1: Performance Improvements](#p1-performance-improvements)
+- [P1: Correctness and Core Features](#p1-correctness-and-core-features)
   - [1. Schema $ref Resolution](#1-schema-ref-resolution)
 - [P2: Maintenance and Code Quality](#p2-maintenance-and-code-quality)
   - [2. Validate Operations Keys in ProfileLoader](#2-validate-operations-keys-in-profileloader)
@@ -15,12 +15,18 @@
   - [4. Response Caching](#4-response-caching)
   - [5. Request Deduplication](#5-request-deduplication)
 
-## P1: Performance Improvements
+## P1: Correctness and Core Features
 
 ### 1. Schema $ref Resolution
-**Current**: `extractSchema()` returns `{ type: 'object' }` for all `$ref` schemas.
+**Current**: `extractSchema()` returns `{ type: 'object' }` for all `$ref` schemas, losing type information.
 
 **Goal**: Fully resolve schema references for accurate type information and validation.
+
+**Impact**: 
+- ✅ Better validation (required fields, enums, formats)
+- ✅ More accurate auto-generated tool parameters
+- ✅ Improved LLM understanding of API structure
+- ⚠️ Slightly slower parsing (negligible - happens once at startup)
 
 **Implementation**:
 - Add `resolveSchema(ref: string): SchemaInfo` similar to `resolveParameter()`
