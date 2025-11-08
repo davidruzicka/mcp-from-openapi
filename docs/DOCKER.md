@@ -7,7 +7,7 @@ Run MCP from OpenAPI server in an isolated Docker container.
 ### 1. Build Image
 
 ```bash
-docker build -t mcp4openapi:latest .
+docker build -t mcp4openapi .
 ```
 
 ### 2. Choose Authentication Mode
@@ -68,7 +68,71 @@ docker run -d \
 # Clients send: Authorization: Bearer <user_token>
 ```
 
-### 4. Verify
+### 4. Connect to the Server
+
+VSCode+Copilot example:
+
+```json
+{
+    "servers": {
+        "mcp4openapi": {
+            "url": "https://mcp-server.example.com/mcp",
+            "headers": {
+                "Authorization": "Bearer ${API_TOKEN}"
+            }
+        },
+        "inputs": [
+            {
+                "type": "promptString",
+                "id": "api_token",
+                "description": "API Authorization Token",
+                "password": true
+            }
+        ]
+    }
+}
+```
+
+Cursor example:
+
+```json
+{
+    "mcpServers": {
+        "mcp4openapi": {
+            "url": "https://mcp-server.example.com/mcp",
+            "headers": {
+                "Authorization": "Bearer ${API_TOKEN}"
+            }
+        }
+    }
+}
+```
+
+Claude Code example:
+
+```bash
+claude mcp add --transport http secure-api https://mcp-server.example.com/mcp --header "Authorization: Bearer ${API_TOKEN}"
+# expects API_TOKEN environment variable to be set
+```
+
+IntelliJ+Copilot (HTTP transport) example:
+
+```json
+{
+    "servers": {
+        "mcp4openapi": {
+            "url": "https://mcp-server.example.com/mcp",
+            "requestInit": {
+                "headers": {
+                    "Authorization": "Bearer ${API_TOKEN}"
+                }
+            }
+        }
+    }
+}
+```
+
+### 5. Verify
 
 ```bash
 # Check health
@@ -93,35 +157,7 @@ The Dockerfile uses multi-stage build for:
 
 ### Environment Variables
 
-All standard environment variables are supported:
-
-```yaml
-# Required
-OPENAPI_SPEC_PATH: /app/profiles/gitlab/openapi.yaml
-MCP_PROFILE_PATH: /app/profiles/gitlab/developer-profile.json
-API_BASE_URL: https://api.example.com
-
-# Optional (can be sent in HTTP headers instead)
-API_TOKEN: your_api_token
-
-# Transport
-MCP_TRANSPORT: http
-MCP_HOST: 0.0.0.0
-MCP_PORT: 3003
-
-# Logging
-LOG_LEVEL: info
-LOG_FORMAT: json
-
-# HTTP Transport
-ALLOWED_ORIGINS: http://localhost:*
-SESSION_TIMEOUT_MS: 1800000
-HEARTBEAT_ENABLED: false
-
-# Metrics
-METRICS_ENABLED: false
-METRICS_PATH: /metrics
-```
+All standard environment variables are supported.
 
 ### Volume Mounts
 
@@ -354,7 +390,7 @@ npm run dev
 ### Build without cache
 
 ```bash
-docker build --no-cache -t mcp4openapi:latest .
+docker build --no-cache -t mcp4openapi .
 ```
 
 ### Multi-platform build
@@ -362,7 +398,7 @@ docker build --no-cache -t mcp4openapi:latest .
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
-  -t mcp4openapi:latest \
+  -t mcp4openapi \
   .
 ```
 
@@ -377,7 +413,7 @@ docker run -d \
   -e OPENAPI_SPEC_PATH=/app/profiles/gitlab/openapi.yaml \
   -e MCP_PROFILE_PATH=/app/profiles/gitlab/developer-profile.json \
   -e API_TOKEN=$GITLAB_TOKEN \
-  mcp4openapi:latest
+  mcp4openapi
 ```
 
 ### Production Setup

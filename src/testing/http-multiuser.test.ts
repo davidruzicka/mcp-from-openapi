@@ -242,6 +242,66 @@ describe('HTTP Multi-User Mode (No API_TOKEN)', () => {
       // Should create session, token will be checked on first tool call
       expect(response.status).toBe(200);
     });
+    
+    it('should accept GitLab-style tokens (glpat-)', async () => {
+      const response = await request(app)
+        .post('/mcp')
+        .set('Content-Type', 'application/json')
+        .set('Accept', 'application/json')
+        .set('Authorization', 'Bearer glpat-test_token_12345')
+        .send({
+          jsonrpc: '2.0',
+          id: 7,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2025-03-26',
+            clientInfo: { name: 'test', version: '1.0.0' }
+          }
+        });
+      
+      expect(response.status).toBe(200);
+      expect(response.headers['mcp-session-id']).toBeDefined();
+    });
+    
+    it('should accept YouTrack-style tokens (perm:)', async () => {
+      const response = await request(app)
+        .post('/mcp')
+        .set('Content-Type', 'application/json')
+        .set('Accept', 'application/json')
+        .set('Authorization', 'Bearer perm:test.token.12345')
+        .send({
+          jsonrpc: '2.0',
+          id: 8,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2025-03-26',
+            clientInfo: { name: 'test', version: '1.0.0' }
+          }
+        });
+      
+      expect(response.status).toBe(200);
+      expect(response.headers['mcp-session-id']).toBeDefined();
+    });
+    
+    it('should handle extra whitespace in Authorization header', async () => {
+      const response = await request(app)
+        .post('/mcp')
+        .set('Content-Type', 'application/json')
+        .set('Accept', 'application/json')
+        .set('Authorization', '  Bearer   test-token-123  ')
+        .send({
+          jsonrpc: '2.0',
+          id: 9,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2025-03-26',
+            clientInfo: { name: 'test', version: '1.0.0' }
+          }
+        });
+      
+      expect(response.status).toBe(200);
+      expect(response.headers['mcp-session-id']).toBeDefined();
+    });
   });
   
   describe('Token Storage', () => {

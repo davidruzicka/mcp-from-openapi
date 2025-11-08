@@ -96,6 +96,8 @@ Source: https://modelcontextprotocol.io/specification/2025-03-26/basic/transport
 - `Accept: application/json` or `text/event-stream` (required)
 - `Mcp-Session-Id: <session-id>` (required except for initialization)
 - `Authorization: Bearer <token>` or `X-API-Token: <token>` (required for initialization if not using env var)
+  - Supports various token formats: GitLab (`glpat-...`), YouTrack (`perm:...`), generic tokens
+  - Flexible whitespace handling (extra spaces are trimmed)
 
 **Request Body**:
 - Single JSON-RPC request/notification/response

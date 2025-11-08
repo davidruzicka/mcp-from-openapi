@@ -42,6 +42,7 @@ export interface HttpTransportConfig {
   rateLimitWindowMs?: number; // Rate limit window in ms (default: 60000 = 1 min)
   rateLimitMaxRequests?: number; // Max requests per window (default: 100)
   rateLimitMetricsMax?: number; // Max requests for /metrics (default: 10)
+  maxTokenLength?: number; // Maximum token length in characters (default: 1000)
 }
 
 export interface McpRequest extends ExpressRequest {

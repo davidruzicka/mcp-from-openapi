@@ -23,6 +23,9 @@ import type {
 import { isInitializeRequest } from './jsonrpc-validator.js';
 import { MetricsCollector } from './metrics.js';
 
+// Default maximum token length (1000 characters)
+const DEFAULT_MAX_TOKEN_LENGTH = 1000;
+
 export class HttpTransport {
   private app: express.Application;
   private server: Server | null = null;
@@ -370,14 +373,23 @@ export class HttpTransport {
    * Validate token format and length
    * 
    * Why centralized: Single source of truth for token validation rules
+   * 
+   * Relaxed validation: Allow common API token characters including colons,
+   * to support various token formats (GitLab glpat-, YouTrack perm:, etc.)
    */
   private validateToken(token: string, source: string): void {
-    if (token.length > 1000) {
-      throw new Error(`${source} too long (max 1000 characters)`);
+    const maxLength = this.config.maxTokenLength ?? DEFAULT_MAX_TOKEN_LENGTH;
+    if (token.length > maxLength) {
+      throw new Error(`${source} too long (max ${maxLength} characters)`);
     }
-    // RFC 6750 Bearer token characters + common API token chars
-    if (!/^[A-Za-z0-9\-._~+/]+=*$/.test(token)) {
-      throw new Error(`Invalid ${source} format`);
+    if (token.length === 0) {
+      throw new Error(`${source} is empty`);
+    }
+    // RFC 6750 Bearer token characters + common API token chars (including colons for YouTrack)
+    // Allow: alphanumeric, dash, underscore, dot, tilde, plus, slash, equals, colon
+    // Note: dash at end of character class to avoid being interpreted as range
+    if (!/^[A-Za-z0-9._~+/:=-]+$/.test(token)) {
+      throw new Error(`Invalid ${source} format: ...${(token||"").slice(-4)}`);
     }
   }
 
@@ -393,12 +405,14 @@ export class HttpTransport {
   private extractAuthToken(req: McpRequest): string | undefined {
     const authHeader = req.headers.authorization;
     if (authHeader) {
-      // Strict Bearer token format validation
-      const match = authHeader.match(/^Bearer\s+([A-Za-z0-9\-._~+/]+=*)$/);
+      // Relaxed Bearer token format validation - allow flexible whitespace
+      // Trim whitespace to handle client variations (IntelliJ, VSCode, etc.)
+      const trimmed = authHeader.trim();
+      const match = trimmed.match(/^Bearer\s+(.+)$/);
       if (!match) {
         throw new Error('Invalid Authorization header format. Expected: Bearer <token>');
       }
-      const token = match[1];
+      const token = match[1].trim();
       this.validateToken(token, 'Authorization token');
       return token;
     }

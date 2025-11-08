@@ -359,6 +359,13 @@ export class MCPServer {
     args: Record<string, unknown>,
     sessionId?: string
   ): Promise<unknown> {
+    this.logger.debug('Executing simple tool', {
+      toolName: toolDef.name,
+      action: args['action'],
+      resourceType: args['resource_type'],
+      sessionId
+    });
+
     const operationId = this.toolGenerator.mapActionToOperation(toolDef, args);
     
     if (!operationId) {
@@ -382,6 +389,14 @@ export class MCPServer {
     const path = this.resolvePath(operation.path, args);
     const queryParams = this.extractQueryParams(operation, args);
     const body = this.extractBody(operation, args, toolDef);
+
+    this.logger.debug('Executing HTTP request', {
+      operationId,
+      method: operation.method,
+      path,
+      hasQueryParams: Object.keys(queryParams).length > 0,
+      hasBody: !!body
+    });
 
     // Validate request body against schema
     if (body && operation.requestBody) {
@@ -552,6 +567,9 @@ export class MCPServer {
       rateLimitWindowMs: parseInt(process.env.HTTP_RATE_LIMIT_WINDOW_MS || '60000', 10),
       rateLimitMaxRequests: parseInt(process.env.HTTP_RATE_LIMIT_MAX_REQUESTS || '100', 10),
       rateLimitMetricsMax: parseInt(process.env.HTTP_RATE_LIMIT_METRICS_MAX || '10', 10),
+      maxTokenLength: process.env.TOKEN_MAX_LENGTH
+        ? parseInt(process.env.TOKEN_MAX_LENGTH, 10)
+        : undefined, // Uses default from http-transport.ts if undefined
     };
 
     // Warn if binding to non-localhost without explicit ALLOWED_ORIGINS
@@ -674,7 +692,12 @@ export class MCPServer {
       };
     } catch (error) {
       // Log internal error details, but return generic message to client
-      this.logger.error('Tool call error', error as Error);
+      this.logger.error('Tool call error', error as Error, {
+        toolName,
+        action: args?.action,
+        resourceType: args?.resource_type,
+        sessionId
+      });
       return {
         jsonrpc: '2.0',
         id: req.id,

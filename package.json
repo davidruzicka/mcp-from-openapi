@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "description": "Universal MCP server that generates tools from any OpenAPI specification",
   "type": "module",
-  "main": "dist/index.js",
+  "main": "dist/src/index.js",
   "exports": {
-    ".": "./dist/lib.js",
-    "./cli": "./dist/index.js"
+    ".": "./dist/src/lib.js",
+    "./cli": "./dist/src/index.js"
   },
   "bin": {
     "mcp4openapi": "dist/src/index.js"
@@ -20,7 +20,7 @@
   "scripts": {
     "build": "npm run generate-schemas && tsc",
     "dev": "tsc --watch",
-    "start": "node dist/index.js",
+    "start": "node dist/src/index.js",
     "test": "vitest run",
     "test:ui": "vitest --ui",
     "lint": "eslint src --ext .ts",
