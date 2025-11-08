@@ -70,30 +70,41 @@ docker run -d \
 
 ### 4. Connect to the Server
 
-VSCode+Copilot example:
+**Configuration File Locations:**
+
+- **Cursor:** `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global)
+- **VS Code + Copilot:** `.vscode/mcp.json` (project) or `~/.config/Code/User/mcp.json` (global)
+- **JetBrains IDEs + Copilot:** `.idea/mcp.json` (project) or `~/.config/github-copilot/intellij/mcp.json` (global)
+- **Claude Code:** `.claude/mcp.json` (project) or `~/.claude/mcp.json` (global)
+
+**VS Code + Copilot example:**
 
 ```json
 {
+    "inputs": [
+        {
+            "type": "promptString",
+            "id": "api_token",
+            "description": "API Authorization Token",
+            "password": true
+        }
+    ],
     "servers": {
         "mcp4openapi": {
             "url": "https://mcp-server.example.com/mcp",
             "headers": {
-                "Authorization": "Bearer ${API_TOKEN}"
+                "Authorization": "Bearer ${input:api_token}"
             }
-        },
-        "inputs": [
-            {
-                "type": "promptString",
-                "id": "api_token",
-                "description": "API Authorization Token",
-                "password": true
-            }
-        ]
+        }
     }
 }
 ```
 
-Cursor example:
+_`inputs` section prompts you for the token when the server starts, so environment variables are not needed._
+
+_⚠️ **Important:** VSCode uses Node.js for remote MCP connections. If your MCP server uses self-signed certificates, you need to configure Node.js to trust them (see [Custom CA Certificates](#custom-ca-certificates) section below)._
+
+**Cursor example:**
 
 ```json
 {
@@ -101,21 +112,25 @@ Cursor example:
         "mcp4openapi": {
             "url": "https://mcp-server.example.com/mcp",
             "headers": {
-                "Authorization": "Bearer ${API_TOKEN}"
+                "Authorization": "Bearer ${env:API_TOKEN}"
             }
         }
     }
 }
 ```
 
-Claude Code example:
+_Environment variables are used to pass tokens to the server when it starts._
+
+**Claude Code example:**
 
 ```bash
-claude mcp add --transport http secure-api https://mcp-server.example.com/mcp --header "Authorization: Bearer ${API_TOKEN}"
+claude mcp add --transport http mcp4openapi \
+  https://mcp-server.example.com/mcp \
+  --header "Authorization: Bearer ${API_TOKEN}"
 # expects API_TOKEN environment variable to be set
 ```
 
-IntelliJ+Copilot (HTTP transport) example:
+**JetBrains IDEs + Copilot example:**
 
 ```json
 {
@@ -124,13 +139,18 @@ IntelliJ+Copilot (HTTP transport) example:
             "url": "https://mcp-server.example.com/mcp",
             "requestInit": {
                 "headers": {
-                    "Authorization": "Bearer ${API_TOKEN}"
+                    "Authorization": "Bearer {$input:api_token}"
+                    // click on ⚠️ to enter token in IDE dialog
                 }
             }
         }
     }
 }
 ```
+
+_`{$input:api_token}` prompts you for the token after you click on ⚠️ next to the `Authorization` header input field._
+
+_⚠️ **Important:** JetBrains IDEs use Node.js for remote MCP connections. If your MCP server uses self-signed certificates, you need to configure Node.js to trust them (see [Custom CA Certificates](#custom-ca-certificates) section below)._
 
 ### 5. Verify
 
@@ -340,6 +360,72 @@ docker stack deploy -c docker-compose.yml mcp-stack
 
 See `k8s/` directory for manifests (to be created).
 
+## Custom CA Certificates
+
+VS Code and JetBrains IDEs use Node.js for remote MCP connections, which has a fixed list of certificate authorities. If your MCP server uses self-signed certificates, you need to configure Node.js to trust them.
+
+### Linux
+
+**Option 1: Disable certificate validation (test only)**
+
+```bash
+export NODE_TLS_REJECT_UNAUTHORIZED=0
+# Persist for current user
+echo 'export NODE_TLS_REJECT_UNAUTHORIZED=0' >> $HOME/.profile
+```
+
+**Option 2: Add custom CA to Node.js**
+
+```bash
+export NODE_EXTRA_CA_CERTS=$HOME/ca-bundle.pem
+# Persist for current user
+echo 'export NODE_EXTRA_CA_CERTS="$HOME/ca-bundle.pem"' >> $HOME/.profile
+```
+
+### Windows (PowerShell)
+
+**Option 1: Disable certificate validation (test only)**
+
+```powershell
+# Session only
+$env:NODE_TLS_REJECT_UNAUTHORIZED = "0"
+# Persist for current user
+setx NODE_TLS_REJECT_UNAUTHORIZED 0
+```
+
+**Option 2: Add custom CA to Node.js**
+
+```powershell
+# Session only
+$env:NODE_EXTRA_CA_CERTS = "$env:USERPROFILE\ca-bundle.pem"
+# Persist for current user
+setx NODE_EXTRA_CA_CERTS "%USERPROFILE%\ca-bundle.pem"
+```
+
+### macOS (zsh/bash)
+
+**Option 1: Disable certificate validation (test only)**
+
+```bash
+# Session only
+export NODE_TLS_REJECT_UNAUTHORIZED=0
+# Persist for current user (zsh)
+echo 'export NODE_TLS_REJECT_UNAUTHORIZED=0' >> $HOME/.zshrc
+# or for bash
+echo 'export NODE_TLS_REJECT_UNAUTHORIZED=0' >> $HOME/.bash_profile
+```
+
+**Option 2: Add custom CA to Node.js**
+
+```bash
+# Session only
+export NODE_EXTRA_CA_CERTS="$HOME/ca-bundle.pem"
+# Persist for current user (zsh)
+echo 'export NODE_EXTRA_CA_CERTS="$HOME/ca-bundle.pem"' >> $HOME/.zshrc
+# or for bash
+echo 'export NODE_EXTRA_CA_CERTS="$HOME/ca-bundle.pem"' >> $HOME/.bash_profile
+```
+
 ## Troubleshooting
 
 ### Container won't start
@@ -377,6 +463,27 @@ deploy:
     limits:
       memory: 256M
 ```
+
+### IDE Connection Issues
+
+**Cursor:**
+1. Open "Output" panel (Ctrl+Shift+U / Cmd+Shift+U)
+2. Select "MCP Logs" from dropdown
+3. Check for connection errors or authentication issues
+
+**VS Code:**
+1. Open "Output" from View menu
+2. Select problematic MCP server from dropdown
+3. Review MCP tool logs for errors
+
+**JetBrains IDEs:**
+1. Open "Help" → "Show Log in <your_explorer>" → "mcp" directory to access MCP log files
+2. Check `<your_mcp_server>.log` for MCP-related errors
+
+**Common connection issues:**
+- **Connection refused:** Check if MCP server is running and accessible
+- **Authentication failed:** Verify token is correct and has required permissions
+- **Certificate errors:** Configure Node.js to trust custom CA certificates (see [Custom CA Certificates](#custom-ca-certificates) above)
 
 ## Development
 

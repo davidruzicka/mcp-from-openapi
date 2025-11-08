@@ -54,30 +54,32 @@ Check example profiles in [profiles/](https://github.com/davidruzicka/mcp4openap
 
 ## Quick Start
 
+### Configuration File Locations
+
+**Cursor:**
+- **Project-Specific:** `.cursor/mcp.json` in your project root
+- **Global:** `~/.cursor/mcp.json` in your home directory (platform-dependent; use `⚙` → `Tools & MCP` → `New MCP Server`)
+
+**VS Code + Copilot:**
+- **Project-Specific:** `.vscode/mcp.json` in your project root
+- **Global:** `~/.config/Code/User/mcp.json` in your home directory (platform-dependent; use `Ctrl+Shift+P` → `MCP: Open User Configuration`)
+
+**JetBrains IDEs + Copilot:**
+- **Project-Specific:** `.idea/mcp.json` in your project root
+- **Global:** `~/.config/github-copilot/intellij/mcp.json` (platform-dependent; use GitHub Copilot icon bottom right → `Edit Setting...` → `Model Context Protocol (MCP)` → `Configure`)
+
+**Claude Code:**
+- **Project-Specific:** `.claude/mcp.json` in your project root
+- **Global:** `~/.claude/mcp.json` in your home directory (platform-dependent)
+
 ### Option A: npx
 
 No installation required.
 
-VSCode+Copilot example:
+**VS Code + Copilot example:**
 
-```json
-{
-    "servers": {
-        "mcp4openapi": {
-            "command": "npx",
-            "args": ["mcp4openapi"],
-            "env": {
-                "OPENAPI_SPEC_PATH": "path/to/openapi.yaml",
-                "API_TOKEN": "api_token", // skip if ${API_TOKEN} environment variable is set
-                "API_BASE_URL": "https://api.example.com",
-                "MCP_PROFILE_PATH": "path/to/mcp-profile.json" //optional
-            }
-        }
-    }
-}
-```
 
-Or you can use VSCode dialog to enter access token:
+Use VS Code dialog to enter access token (recommended for security):
 
 ```json
 {
@@ -104,7 +106,9 @@ Or you can use VSCode dialog to enter access token:
 }
 ```
 
-Cursor example:
+_`inputs` section prompts you for the token when the server starts, so environment variables are not needed._
+
+**Cursor example:**
 
 ```json
 {
@@ -114,7 +118,7 @@ Cursor example:
             "args": ["mcp4openapi"],
             "env": {
                 "OPENAPI_SPEC_PATH": "path/to/openapi.yaml",
-                "API_TOKEN": "api_token", // skip if ${API_TOKEN} environment variable is set
+                "API_TOKEN": "${env:API_TOKEN}", // uses environment variable
                 "API_BASE_URL": "https://api.example.com",
                 "MCP_PROFILE_PATH": "path/to/mcp-profile.json" //optional
             }
@@ -123,14 +127,21 @@ Cursor example:
 }
 ```
 
-Claude Code example:
+_Environment variables are used to pass tokens to the server when it starts, so you don't need to pass them as plain text._
+
+**Claude Code example:**
 
 ```bash
-claude mcp add --transport stdio mcp4openapi --env API_TOKEN="${API_TOKEN}" --env OPENAPI_SPEC_PATH=path/to/openapi.yaml --env API_BASE_URL=https://api.example.com --env MCP_PROFILE_PATH=path/to/mcp-profile.json -- npx mcp4openapi
+claude mcp add --transport stdio mcp4openapi \
+  --env API_TOKEN="${API_TOKEN}" \
+  --env OPENAPI_SPEC_PATH=path/to/openapi.yaml \
+  --env API_BASE_URL=https://api.example.com \
+  --env MCP_PROFILE_PATH=path/to/mcp-profile.json \
+  -- npx mcp4openapi
 # expects API_TOKEN environment variable to be set
 ```
 
-IntelliJ+Copilot (HTTP transport) example:
+**JetBrains IDEs + Copilot example:**
 
 ```json
 {
@@ -151,89 +162,7 @@ IntelliJ+Copilot (HTTP transport) example:
 
 ### Option B: Docker
 
-**1. Build image:**
-```bash
-docker build -t mcp4openapi .
-```
-
-**2. Run with docker-compose:**
-```bash
-# Copy and edit environment file
-cp .env.example .env
-# Edit .env with your API_TOKEN (for stdio) and API_BASE_URL and other settings
-
-# Start server
-docker-compose --env-file .env up -d
-
-# Check health
-curl http://localhost:3003/health
-```
-
-**3. Connect to the server:**
-
-VSCode+Copilot example:
-
-```json
-{
-    "servers": {
-        "mcp4openapi": {
-            "url": "https://mcp-server.example.com/mcp",
-            "headers": {
-                "Authorization": "Bearer ${API_TOKEN}"
-            }
-        },
-        "inputs": [
-            {
-                "type": "promptString",
-                "id": "api_token",
-                "description": "API Authorization Token",
-                "password": true
-            }
-        ]
-    }
-}
-```
-
-Cursor example:
-
-```json
-{
-    "mcpServers": {
-        "mcp4openapi": {
-            "url": "https://mcp-server.example.com/mcp",
-            "headers": {
-                "Authorization": "Bearer ${API_TOKEN}"
-            }
-        }
-    }
-}
-```
-
-Claude Code example:
-
-```bash
-claude mcp add --transport http mcp4openapi https://mcp-server.example.com/mcp --header "Authorization: Bearer ${API_TOKEN}"
-# expects API_TOKEN environment variable to be set
-```
-
-IntelliJ+Copilot (HTTP transport) example:
-
-```json
-{
-    "servers": {
-        "mcp4openapi": {
-            "url": "https://mcp-server.example.com/mcp",
-            "requestInit": {
-                "headers": {
-                    "Authorization": "Bearer YOUR_API_TOKEN"
-                }
-            }
-        }
-    }
-}
-```
-
-See [docs/DOCKER.md](./docs/DOCKER.md) for authentication modes, production deployment, and security.
+See [docs/DOCKER.md](./docs/DOCKER.md) for build, run, authentication modes, production deployment, and security.
 
 ## Local Development
 
@@ -261,6 +190,72 @@ npm start
 ```
 
 See [docs/HTTP-TRANSPORT.md](./docs/HTTP-TRANSPORT.md) for transport options (stdio vs HTTP) and authentication modes.
+
+## Custom CA Certificates
+
+Node.js has a fixed list of certificate authorities. If your MCP server uses self-signed certificates, you need to configure Node.js to trust them.
+
+### Linux
+
+**Option 1: Disable certificate validation (test only)**
+
+```bash
+export NODE_TLS_REJECT_UNAUTHORIZED=0
+# Persist for current user
+echo 'export NODE_TLS_REJECT_UNAUTHORIZED=0' >> $HOME/.profile
+```
+
+**Option 2: Add custom CA to Node.js**
+
+```bash
+export NODE_EXTRA_CA_CERTS=$HOME/ca-bundle.pem
+# Persist for current user
+echo 'export NODE_EXTRA_CA_CERTS="$HOME/ca-bundle.pem"' >> $HOME/.profile
+```
+
+### Windows (PowerShell)
+
+**Option 1: Disable certificate validation (test only)**
+
+```powershell
+# Session only
+$env:NODE_TLS_REJECT_UNAUTHORIZED = "0"
+# Persist for current user
+setx NODE_TLS_REJECT_UNAUTHORIZED 0
+```
+
+**Option 2: Add custom CA to Node.js**
+
+```powershell
+# Session only
+$env:NODE_EXTRA_CA_CERTS = "$env:USERPROFILE\ca-bundle.pem"
+# Persist for current user
+setx NODE_EXTRA_CA_CERTS "%USERPROFILE%\ca-bundle.pem"
+```
+
+### macOS (zsh/bash)
+
+**Option 1: Disable certificate validation (test only)**
+
+```bash
+# Session only
+export NODE_TLS_REJECT_UNAUTHORIZED=0
+# Persist for current user (zsh)
+echo 'export NODE_TLS_REJECT_UNAUTHORIZED=0' >> $HOME/.zshrc
+# or for bash
+echo 'export NODE_TLS_REJECT_UNAUTHORIZED=0' >> $HOME/.bash_profile
+```
+
+**Option 2: Add custom CA to Node.js**
+
+```bash
+# Session only
+export NODE_EXTRA_CA_CERTS="$HOME/ca-bundle.pem"
+# Persist for current user (zsh)
+echo 'export NODE_EXTRA_CA_CERTS="$HOME/ca-bundle.pem"' >> $HOME/.zshrc
+# or for bash
+echo 'export NODE_EXTRA_CA_CERTS="$HOME/ca-bundle.pem"' >> $HOME/.bash_profile
+```
 
 ## Environment Variables
 
@@ -292,7 +287,7 @@ When running without a profile, authentication is automatically configured from 
 ```bash
 export AUTH_ENV_VAR=GITLAB_TOKEN
 export GITLAB_TOKEN=glpat-xxxxxxxxxxxx
-export OPENAPI_SPEC_PATH=./openapi.yaml
+export OPENAPI_SPEC_PATH=path/to/openapi.yaml
 npm start
 ```
 
@@ -330,7 +325,7 @@ When generating tools from OpenAPI without a profile, long operation IDs may exc
 - `MCP_TOOLNAME_MAX`: Maximum tool name length (default: `45`)
 - `MCP_TOOLNAME_STRATEGY`: Shortening strategy: `none|balanced|iterative|hash|auto` (default: `none`)
   - `none`: No shortening, only warnings
-  - `balanced`: Add parts by importance until unique & meaningful (recommended, min 3 parts, 20 chars)
+  - `balanced`: Add parts by importance until unique & meaningful (recommended)
   - `iterative`: Progressively remove noise until under limit (conservative)
   - `hash`: Use verb + resource + hash for guaranteed uniqueness
   - `auto`: Try strategies in order: balanced → iterative → hash
@@ -409,7 +404,8 @@ HTTP status: `429 Too Many Requests` with `RateLimit-*` headers.
 
 ## Profile System
 
-Profiles define which MCP tools to expose and how to aggregate them. **Start with existing profiles** from `profiles/` (e.g., GitLab).
+Profile defines which MCP tools from OpenAPI spec are exposed and how to aggregate them.
+**Start with existing profiles** from `profiles/` (e.g., GitLab).
 
 **Features:**
 - Tool aggregation (group related operations)
@@ -438,13 +434,41 @@ npm run validate:schema
 npm test
 ```
 
+## Troubleshooting MCP
+
+**Cursor:**
+1. Open "Output" panel (Ctrl+Shift+U / Cmd+Shift+U)
+2. Select "MCP Logs" from dropdown
+3. Check for connection errors or authentication issues
+
+**VS Code:**
+1. Open "Output" from View menu
+2. Select problematic MCP server from dropdown
+3. Review MCP tool logs for errors
+
+**JetBrains IDEs:**
+1. Open "Help" → "Show Log in <your_explorer>" → "mcp" directory to access MCP log files
+2. Check `<your_mcp_server>.log` for MCP-related errors
+
+**Common Issues:**
+- **Connection refused:** Check if MCP server is running and accessible
+- **Authentication failed:** Verify token is correct and has required permissions
+- **Certificate errors:** Configure Node.js to trust custom CA certificates (see [Custom CA Certificates](#custom-ca-certificates))
+- **Tool not found:** Verify OpenAPI spec path and profile configuration
+
+## IDE-Specific Documentation
+
+- **Cursor:** [Cursor MCP Guide](https://docs.cursor.com/en/context/mcp)
+- **VS Code + Copilot:** [VS Code MCP Servers](https://code.visualstudio.com/docs/copilot/customization/mcp-servers), [GitHub Copilot MCP Guide](https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp/extend-copilot-chat-with-mcp?tool=vscode)
+- **JetBrains IDEs + Copilot:** [JetBrains+Copilot MCP Guide](https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp/extend-copilot-chat-with-mcp?tool=jetbrains)
+
 ## Documentation
 
 - **[docs/EXAMPLE-GITLAB.md](./docs/EXAMPLE-GITLAB.md)** - Complete GitLab API example with curl commands
 - **[docs/PROFILE-GUIDE.md](./docs/PROFILE-GUIDE.md)** - Guide for creating custom profiles
 - **[docs/HTTP-TRANSPORT.md](./docs/HTTP-TRANSPORT.md)** - HTTP transport setup and usage
-- **[USAGE.md](./USAGE.md)** - General usage guide
-- **`profiles/gitlab/`** - Example profiles for GitLab API
+- **[docs/DOCKER.md](./docs/DOCKER.md)** - Docker deployment guide
+- **`profiles/`** - Example profiles for OpenAPI specs
 - **`profile-schema.json`** - JSON Schema for IDE autocomplete
 
 ## Project Status
