@@ -58,7 +58,7 @@ Check example profiles in [profiles/](https://github.com/davidruzicka/mcp4openap
 
 **Cursor:**
 - **Project-Specific:** `.cursor/mcp.json` in your project root
-- **Global:** `~/.cursor/mcp.json` in your home directory (platform-dependent; use `⚙` → `Tools & MCP` → `New MCP Server`)
+- **Global:** default `~/.cursor/mcp.json` in your home directory (various, platform-dependent location based on current Cursor profile; use `⚙` → `Tools & MCP` → `New MCP Server`)
 
 **VS Code + Copilot:**
 - **Project-Specific:** `.vscode/mcp.json` in your project root
@@ -118,7 +118,7 @@ _`inputs` section prompts you for the token when the server starts, so environme
             "args": ["mcp4openapi"],
             "env": {
                 "OPENAPI_SPEC_PATH": "path/to/openapi.yaml",
-                "API_TOKEN": "${env:API_TOKEN}", // uses environment variable
+                "API_TOKEN": "${env:API_TOKEN}",
                 "API_BASE_URL": "https://api.example.com",
                 "MCP_PROFILE_PATH": "path/to/mcp-profile.json" //optional
             }
@@ -127,7 +127,16 @@ _`inputs` section prompts you for the token when the server starts, so environme
 }
 ```
 
-_Environment variables are used to pass tokens to the server when it starts, so you don't need to pass them as plain text._
+#### ⚠️ Prerequisites
+
+- You need `npx` NPM package to be installed.
+
+- Remote MCP server connections in Cursor run in a sandbox that doesn't have access to environment variables. The `mcp-remote` command reads environment variables from `~/.env.mcp` file. Make sure to set your tokens there:
+
+```bash
+# ~/.env.mcp
+API_TOKEN=your_api_token_here
+```
 
 **Claude Code example:**
 

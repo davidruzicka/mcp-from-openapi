@@ -72,10 +72,10 @@ docker run -d \
 
 **Configuration File Locations:**
 
-- **Cursor:** `.cursor/mcp.json` (project) or `~/.cursor/mcp.json` (global)
-- **VS Code + Copilot:** `.vscode/mcp.json` (project) or `~/.config/Code/User/mcp.json` (global)
-- **JetBrains IDEs + Copilot:** `.idea/mcp.json` (project) or `~/.config/github-copilot/intellij/mcp.json` (global)
-- **Claude Code:** `.claude/mcp.json` (project) or `~/.claude/mcp.json` (global)
+- **Cursor:** `.cursor/mcp.json` (project) or default `~/.cursor/mcp.json` (global, various platform-dependent location based on current Cursor profile; use `⚙` → `Tools & MCP` → `New MCP Server`)
+- **VS Code + Copilot:** `.vscode/mcp.json` (project) or `~/.config/Code/User/mcp.json` (global, platform-dependent; use `Ctrl+Shift+P` → `MCP: Open User Configuration`)
+- **JetBrains IDEs + Copilot:** `.idea/mcp.json` (project) or `~/.config/github-copilot/intellij/mcp.json` (global, platform-dependent; use GitHub Copilot icon bottom right → `Edit Setting...` → `Model Context Protocol (MCP)` → `Configure`)
+- **Claude Code:** `.claude/mcp.json` (project) or `~/.claude/mcp.json` (global, platform-dependent)
 
 **VS Code + Copilot example:**
 
@@ -110,16 +110,31 @@ _⚠️ **Important:** VSCode uses Node.js for remote MCP connections. If your M
 {
     "mcpServers": {
         "mcp4openapi": {
-            "url": "https://mcp-server.example.com/mcp",
-            "headers": {
-                "Authorization": "Bearer ${env:API_TOKEN}"
+            "command": "npx",
+            "args": [
+                "mcp-remote",
+                "https://mcp-server.example.com/mcp",
+                "--header",
+                "Authorization: Bearer ${env:API_TOKEN}"
+            ],
+            "env": {
+                "API_TOKEN": "${env:API_TOKEN}"
             }
         }
     }
 }
 ```
 
-_Environment variables are used to pass tokens to the server when it starts._
+#### ⚠️ Prerequisites
+
+- You need `npx` NPM package to be installed.
+
+- Remote MCP server connections in Cursor run in a sandbox that doesn't have access to environment variables. The `mcp-remote` command reads environment variables from `~/.env.mcp` file. Make sure to set your tokens there:
+
+```bash
+# ~/.env.mcp
+API_TOKEN=your_api_token_here
+```
 
 **Claude Code example:**
 
@@ -183,12 +198,7 @@ All standard environment variables are supported.
 
 **Profiles** (required):
 ```bash
--v $(pwd)/profiles:/app/profiles:ro
-```
-
-**Custom OpenAPI specs** (optional):
-```bash
--v $(pwd)/specs:/app/specs:ro
+-v path/to/profiles:/app/profiles:ro
 ```
 
 ## Security
@@ -205,7 +215,7 @@ USER mcp
 ### Network Exposure
 
 **Default**: Binds to `0.0.0.0:3003` for container networking
-**Production**: Use reverse proxy (nginx, Traefik) for SSL/TLS
+**Production**: Use reverse proxy (nginx, Traefik etc.) for SSL/TLS
 
 ### Secrets Management
 
@@ -236,7 +246,7 @@ env:
 
 ## Health Check
 
-Built-in health check every 30 seconds:
+Built-in health check:
 ```bash
 # Check container health
 docker ps
@@ -255,8 +265,8 @@ deploy:
       cpus: '1'
       memory: 512M
     reservations:
-      cpus: '0.5'
-      memory: 256M
+      cpus: '0.25'
+      memory: 128M
 ```
 
 ## Monitoring
@@ -268,7 +278,7 @@ deploy:
 docker-compose logs -f mcp-server | jq .
 ```
 
-**Console logs**:
+**Switching to Console logs**:
 ```yaml
 environment:
   - LOG_FORMAT=console
@@ -287,29 +297,7 @@ Access metrics:
 curl http://localhost:3003/metrics
 ```
 
-### Prometheus Integration
-
-Uncomment prometheus service in `docker-compose.yml`:
-```yaml
-prometheus:
-  image: prom/prometheus:latest
-  ports:
-    - "9090:9090"
-  volumes:
-    - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
-```
-
-Create `prometheus.yml`:
-```yaml
-scrape_configs:
-  - job_name: 'mcp-server'
-    static_configs:
-      - targets: ['mcp-server:3003']
-    metrics_path: '/metrics'
-    scrape_interval: 15s
-```
-
-## Production Deployment
+## Production Deployment Examples
 
 ### 1. Reverse Proxy (nginx)
 
@@ -358,7 +346,73 @@ docker stack deploy -c docker-compose.yml mcp-stack
 
 ### 3. Kubernetes
 
-See `k8s/` directory for manifests (to be created).
+Deployment:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mcp4openapi
+  namespace: mcp4openapi-group
+  labels:
+    app: mcp4openapi
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mcp4openapi
+  template:
+    metadata:
+      labels:
+        app: mcp4openapi
+    spec:
+      automountServiceAccountToken: false
+      containers:
+      - name: mcp4openapi
+        image: docker.io/davidruzicka/mcp4openapi:latest
+        ports:
+        - containerPort: 3003
+          protocol: TCP
+        env:
+        - name: HEARTBEAT_ENABLED
+          value: "true"
+        - name: API_BASE_URL
+          value: https://your-api-instance/api/v4
+        - name: OPENAPI_SPEC_PATH
+          value: /app/profiles/your-openapi-spec.yaml
+        - name: MCP_PROFILE_PATH
+          value: /app/profiles/your-mcp-profile.json
+        - name: METRICS_ENABLED
+          value: "true"
+        # uncomment in case of self-signed CAs
+        #- name: NODE_EXTRA_CA_CERTS
+        #  value: /path/to/ca-bundle.pem
+        resources:
+          limits:
+            cpu: 4000m
+            memory: 4Gi
+          requests:
+            cpu: 250m
+            memory: 512Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 3003
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 1
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 3003
+            scheme: HTTP
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 1
+          failureThreshold: 3
+```
 
 ## Custom CA Certificates
 
@@ -432,7 +486,7 @@ echo 'export NODE_EXTRA_CA_CERTS="$HOME/ca-bundle.pem"' >> $HOME/.bash_profile
 
 **Check logs**:
 ```bash
-docker-compose logs mcp-server
+docker-compose logs mcp4openapi
 ```
 
 **Common issues**:
@@ -444,14 +498,14 @@ docker-compose logs mcp-server
 
 **Ensure volume permissions**:
 ```bash
-chmod -R 755 profiles/
+chmod -R 755 path/to/profiles/
 ```
 
 ### Health check failing
 
 **Manual test**:
 ```bash
-docker exec mcp-server wget -O- http://localhost:3003/health
+docker exec mcp4openapi wget -O- http://localhost:3003/health
 ```
 
 ### High memory usage
@@ -468,7 +522,7 @@ deploy:
 
 **Cursor:**
 1. Open "Output" panel (Ctrl+Shift+U / Cmd+Shift+U)
-2. Select "MCP Logs" from dropdown
+2. Select "MCP: ..." from dropdown with your MCP server name
 3. Check for connection errors or authentication issues
 
 **VS Code:**
@@ -511,30 +565,16 @@ docker buildx build \
 
 ## Examples
 
-### Minimal Setup
+### Minimal Example
 
 ```bash
 docker run -d \
   -p 3003:3003 \
-  -v $(pwd)/profiles:/app/profiles:ro \
+  -v path/to/profiles:/app/profiles:ro \
   -e OPENAPI_SPEC_PATH=/app/profiles/gitlab/openapi.yaml \
   -e MCP_PROFILE_PATH=/app/profiles/gitlab/developer-profile.json \
   -e API_TOKEN=$GITLAB_TOKEN \
   mcp4openapi
-```
-
-### Production Setup
-
-```bash
-docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
-```
-
-### With Metrics
-
-```bash
-docker-compose --env-file .env.docker up -d
-# Access Prometheus at http://localhost:9090
-# Access metrics at http://localhost:3003/metrics
 ```
 
 ## CI/CD Integration
@@ -547,8 +587,8 @@ docker-compose --env-file .env.docker up -d
 
 - name: Push to registry
   run: |
-    docker tag mcp4openapi:${{ github.sha }} registry.example.com/mcp:latest
-    docker push registry.example.com/mcp:latest
+    docker tag mcp4openapi:${{ github.sha }} registry.example.com/mcp4openapi:latest
+    docker push registry.example.com/mcp4openapi:latest
 ```
 
 ### GitLab CI
@@ -563,21 +603,18 @@ build:
     - docker push $CI_REGISTRY_IMAGE:$CI_COMMIT_SHA
 ```
 
-## Best Practices
+## Best Practices for Production
 
-1. **Use specific tags**: `mcp4openapi:v1.0.0` not `latest`
+1. **Use specific tags**: `mcp4openapi:v1.0.0` not `latest` (controlled upgrades)
 2. **Limit resources**: Set CPU/memory limits
 3. **Health checks**: Always configure health checks
 4. **Structured logs**: Use JSON format for log aggregation
-5. **Secrets**: Never commit `.env.docker` to git
+5. **Secrets**: Never commit `.env` files to git (even development ones)
 6. **Updates**: Rebuild image regularly for security patches
-7. **Monitoring**: Enable metrics in production
-8. **Backups**: Volume data if using local storage
+7. **Monitoring**: Enable metrics collection
 
 ## References
 
 - [Dockerfile best practices](https://docs.docker.com/develop/develop-images/dockerfile_best-practices/)
 - [Docker Compose documentation](https://docs.docker.com/compose/)
 - [Multi-stage builds](https://docs.docker.com/build/building/multi-stage/)
-
-
