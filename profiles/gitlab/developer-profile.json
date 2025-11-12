@@ -492,7 +492,7 @@
         },
         "resource_id": {
           "type": "string",
-          "description": "Project ID (numeric or URL-encoded path) or Group ID (numeric or short name)",
+          "description": "Project ID (numeric like '123' or URL-encoded path like 'group%2Fproject') or Group ID (numeric or short name like 'ai-adoption')",
           "required": true,
           "example": "ai-adoption"
         },
