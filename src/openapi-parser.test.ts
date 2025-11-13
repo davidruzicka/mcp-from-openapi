@@ -191,6 +191,31 @@ describe('OpenAPIParser - schema resolution', () => {
     expect(base?.properties?.code?.format).toBeUndefined();
     expect(base?.properties?.code?.type).toBe('string');
   });
+
+  it('returns fresh clones for cached schemas', () => {
+    const parser = new OpenAPIParser();
+    (parser as any).spec = JSON.parse(JSON.stringify(baseSpec));
+
+    const first = (parser as any).resolveSchema('#/components/schemas/Pet');
+    expect(first).toBeDefined();
+    if (!first?.properties?.id) {
+      throw new Error('Expected id property to be present');
+    }
+    first.properties.id.type = 'string';
+
+    const second = (parser as any).resolveSchema('#/components/schemas/Pet');
+    expect(second).toBeDefined();
+    expect(second).not.toBe(first);
+    expect(second?.properties?.id?.type).toBe('integer');
+  });
+
+  it('returns undefined for unknown references', () => {
+    const parser = new OpenAPIParser();
+    (parser as any).spec = JSON.parse(JSON.stringify(baseSpec));
+
+    const resolved = (parser as any).resolveSchema('#/components/schemas/Missing');
+    expect(resolved).toBeUndefined();
+  });
 });
 
 describe('OpenAPIParser - Security Schemes', () => {
