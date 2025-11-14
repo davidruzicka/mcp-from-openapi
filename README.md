@@ -48,6 +48,7 @@ More about profiles: [docs/PROFILE-GUIDE.md](https://github.com/davidruzicka/mcp
 - **Profiles**: Create JSON configuration transforming API to MCP tools LLM friendly in profiles
 - **Tool Aggregation**: Reduce tool clutter - group related operations in profiles
 - **Composite Actions**: Chain API calls into workflows in profiles
+- **OAuth 2.0**: Browser-based authentication flow for HTTP transport (see [docs/OAUTH.md](./docs/OAUTH.md))
 - **Observability**: Structured logging (console/JSON) with profile-aware token redaction, Prometheus metrics
 
 Check example profiles in [profiles/](https://github.com/davidruzicka/mcp4openapi/tree/main/profiles).
@@ -476,6 +477,8 @@ npm test
 - **[docs/EXAMPLE-GITLAB.md](./docs/EXAMPLE-GITLAB.md)** - Complete GitLab API example with curl commands
 - **[docs/PROFILE-GUIDE.md](./docs/PROFILE-GUIDE.md)** - Guide for creating custom profiles
 - **[docs/HTTP-TRANSPORT.md](./docs/HTTP-TRANSPORT.md)** - HTTP transport setup and usage
+- **[docs/OAUTH.md](./docs/OAUTH.md)** - OAuth 2.0 authentication setup guide
+- **[docs/DEPLOYMENT-K8S-OAUTH.md](./docs/DEPLOYMENT-K8S-OAUTH.md)** - Production deployment: Kubernetes + OAuth
 - **[docs/DOCKER.md](./docs/DOCKER.md)** - Docker deployment guide
 - **`profiles/`** - Example profiles for OpenAPI specs
 - **`profile-schema.json`** - JSON Schema for IDE autocomplete

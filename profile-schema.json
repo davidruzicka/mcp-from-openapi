@@ -239,16 +239,16 @@
     },
     "Auth": {
       "type": "object",
-      "required": ["type", "value_from_env"],
+      "required": ["type"],
       "properties": {
         "type": {
           "type": "string",
-          "enum": ["bearer", "query", "custom-header"],
+          "enum": ["bearer", "query", "custom-header", "oauth"],
           "description": "Authentication type"
         },
         "value_from_env": {
           "type": "string",
-          "description": "Environment variable name containing the auth token",
+          "description": "Environment variable name containing the auth token (required for bearer, query, custom-header)",
           "pattern": "^[A-Z][A-Z0-9_]*$",
           "examples": ["API_TOKEN", "GITLAB_TOKEN"]
         },
@@ -261,9 +261,29 @@
           "type": "string",
           "description": "Query parameter name (required for query type)",
           "examples": ["api_key", "token"]
+        },
+        "oauth_config": {
+          "$ref": "#/definitions/OAuthConfig"
         }
       },
       "allOf": [
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "enum": ["bearer", "query", "custom-header"]
+              }
+            }
+          },
+          "then": {
+            "required": ["value_from_env"],
+            "properties": {
+              "value_from_env": {
+                "type": "string"
+              }
+            }
+          }
+        },
         {
           "if": {
             "properties": {
@@ -297,8 +317,79 @@
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "type": {
+                "const": "oauth"
+              }
+            }
+          },
+          "then": {
+            "required": ["oauth_config"],
+            "properties": {
+              "oauth_config": {
+                "$ref": "#/definitions/OAuthConfig"
+              }
+            }
+          }
         }
       ]
+    },
+    "OAuthConfig": {
+      "type": "object",
+      "required": ["authorization_endpoint", "token_endpoint", "scopes"],
+      "properties": {
+        "authorization_endpoint": {
+          "type": "string",
+          "description": "OAuth 2.0 authorization endpoint (supports ${env:VAR} syntax)",
+          "examples": ["https://gitlab.seznam.net/oauth/authorize", "${env:OAUTH_AUTHORIZATION_URL}"]
+        },
+        "token_endpoint": {
+          "type": "string",
+          "description": "OAuth 2.0 token endpoint (supports ${env:VAR} syntax)",
+          "examples": ["https://gitlab.seznam.net/oauth/token", "${env:OAUTH_TOKEN_URL}"]
+        },
+        "client_id": {
+          "type": "string",
+          "description": "Pre-registered OAuth client ID (supports ${env:VAR} syntax). Optional for dynamic registration.",
+          "examples": ["${env:GITLAB_OAUTH_CLIENT_ID}"]
+        },
+        "client_secret": {
+          "type": "string",
+          "description": "Pre-registered OAuth client secret (supports ${env:VAR} syntax). Optional for public clients.",
+          "examples": ["${env:GITLAB_OAUTH_CLIENT_SECRET}"]
+        },
+        "scopes": {
+          "type": "array",
+          "description": "OAuth 2.0 scopes to request",
+          "items": {
+            "type": "string"
+          },
+          "examples": [["api", "read_user"], ["read_repository", "write_repository"]]
+        },
+        "redirect_uri": {
+          "type": "string",
+          "description": "OAuth callback URI. Defaults to http://{MCP_HOST}:{MCP_PORT}/oauth/callback",
+          "examples": ["http://localhost:3003/oauth/callback"]
+        },
+        "registration_endpoint": {
+          "type": "string",
+          "description": "Client registration endpoint for dynamic registration (RFC 7591)",
+          "examples": ["https://gitlab.seznam.net/oauth/register"]
+        },
+        "introspection_endpoint": {
+          "type": "string",
+          "description": "Token introspection endpoint (RFC 7662)",
+          "examples": ["https://gitlab.seznam.net/oauth/introspect"]
+        },
+        "revocation_endpoint": {
+          "type": "string",
+          "description": "Token revocation endpoint (RFC 7009)",
+          "examples": ["https://gitlab.seznam.net/oauth/revoke"]
+        }
+      }
     },
     "BaseUrl": {
       "type": "object",

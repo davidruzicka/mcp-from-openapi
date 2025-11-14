@@ -181,7 +181,7 @@ export class MCPServer {
     const baseUrl = this.getBaseUrl();
     const authConfig = this.profile.interceptors?.auth;
     const hasAuth = !!authConfig;
-    const envToken = hasAuth ? process.env[authConfig.value_from_env] : undefined;
+    const envToken = hasAuth && authConfig.value_from_env ? process.env[authConfig.value_from_env] : undefined;
 
     if (hasAuth && envToken) {
       // Token available in env - create global client (stdio transport)
@@ -625,6 +625,13 @@ export class MCPServer {
   async runHttp(host: string, port: number): Promise<void> {
     const { HttpTransport } = await import('./http-transport.js');
     
+    // Get OAuth config from profile if auth type is oauth
+    let oauthConfig: any = undefined;
+    if (this.profile?.interceptors?.auth?.type === 'oauth') {
+      oauthConfig = this.profile.interceptors.auth.oauth_config;
+      this.logger.info('OAuth authentication enabled for HTTP transport');
+    }
+    
     const config = {
       host,
       port,
@@ -643,6 +650,7 @@ export class MCPServer {
       maxTokenLength: process.env.TOKEN_MAX_LENGTH
         ? parseInt(process.env.TOKEN_MAX_LENGTH, 10)
         : undefined, // Uses default from http-transport.ts if undefined
+      oauthConfig, // Pass OAuth config if available
     };
 
     // Warn if binding to non-localhost without explicit ALLOWED_ORIGINS

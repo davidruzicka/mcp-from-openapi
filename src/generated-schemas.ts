@@ -20,13 +20,6 @@ export const parameterDefinitionSchema = z.object({
     example: z.unknown().optional()
 });
 
-export const authInterceptorSchema = z.object({
-    type: z.union([z.literal("bearer"), z.literal("query"), z.literal("custom-header")]),
-    header_name: z.string().optional(),
-    query_param: z.string().optional(),
-    value_from_env: z.string()
-});
-
 export const baseUrlConfigSchema = z.object({
     value_from_env: z.string(),
     default: z.string().optional()
@@ -45,6 +38,18 @@ export const retryConfigSchema = z.object({
     retry_on_status: z.array(z.number())
 });
 
+export const oAuthConfigSchema = z.object({
+    authorization_endpoint: z.string(),
+    token_endpoint: z.string(),
+    client_id: z.string().optional(),
+    client_secret: z.string().optional(),
+    scopes: z.array(z.string()),
+    redirect_uri: z.string().optional(),
+    registration_endpoint: z.string().optional(),
+    introspection_endpoint: z.string().optional(),
+    revocation_endpoint: z.string().optional()
+});
+
 export const toolDefinitionSchema = z.object({
     name: z.string(),
     description: z.string(),
@@ -55,6 +60,14 @@ export const toolDefinitionSchema = z.object({
     parameters: z.record(z.string(), parameterDefinitionSchema),
     metadata_params: z.array(z.string()).optional(),
     response_fields: z.record(z.string(), z.array(z.string())).optional()
+});
+
+export const authInterceptorSchema = z.object({
+    type: z.union([z.literal("bearer"), z.literal("query"), z.literal("custom-header"), z.literal("oauth")]),
+    header_name: z.string().optional(),
+    query_param: z.string().optional(),
+    value_from_env: z.string().optional(),
+    oauth_config: oAuthConfigSchema.optional()
 });
 
 export const interceptorConfigSchema = z.object({

@@ -12,6 +12,7 @@ import express, { Request, Response, NextFunction } from 'express';
 import type { Server } from 'http';
 import crypto from 'crypto';
 import rateLimit from 'express-rate-limit';
+import { mcpAuthRouter } from '@modelcontextprotocol/sdk/server/auth/router.js';
 import type { Logger } from './logger.js';
 import type {
   SessionData,
@@ -22,6 +23,7 @@ import type {
 } from './types/http-transport.js';
 import { isInitializeRequest } from './jsonrpc-validator.js';
 import { MetricsCollector } from './metrics.js';
+import { ExternalOAuthProvider } from './oauth-provider.js';
 
 // Default maximum token length (1000 characters)
 const DEFAULT_MAX_TOKEN_LENGTH = 1000;
@@ -35,6 +37,7 @@ export class HttpTransport {
   private metrics: MetricsCollector | null = null;
   private cleanupInterval: NodeJS.Timeout | null = null;
   private messageHandler: ((message: unknown, sessionId?: string) => Promise<unknown>) | null = null;
+  private oauthProvider: ExternalOAuthProvider | null = null;
 
   constructor(config: HttpTransportConfig, logger: Logger) {
     this.config = config;
@@ -46,6 +49,12 @@ export class HttpTransport {
         enabled: true,
         prefix: 'mcp_',
       });
+    }
+    
+    // Initialize OAuth provider if configured
+    if (config.oauthConfig) {
+      this.oauthProvider = new ExternalOAuthProvider(config.oauthConfig, logger);
+      this.logger.info('OAuth provider initialized');
     }
     
     this.app = express();
@@ -237,6 +246,41 @@ export class HttpTransport {
    */
   private setupRoutes(): void {
     this.logger.info('Setting up HTTP routes');
+
+    // OAuth 2.0 routes (if configured)
+    if (this.oauthProvider) {
+      const serverUrl = new URL(`http://${this.config.host}:${this.config.port}/mcp`);
+      const issuerUrl = new URL(this.config.oauthConfig!.authorization_endpoint).origin;
+      
+      // Build redirect URI
+      const redirectUri = this.config.oauthConfig!.redirect_uri || 
+        `http://${this.config.host}:${this.config.port}/oauth/callback`;
+      
+      this.logger.info('Setting up OAuth routes', {
+        serverUrl: serverUrl.toString(),
+        issuerUrl,
+        redirectUri,
+      });
+
+      // Install MCP OAuth router
+      // This adds standard OAuth endpoints:
+      // - /.well-known/oauth-authorization-server
+      // - /.well-known/oauth-protected-resource
+      // - /oauth/authorize
+      // - /oauth/token
+      // - /oauth/register (dynamic client registration)
+      // - /oauth/revoke (token revocation)
+      this.app.use(mcpAuthRouter({
+        provider: this.oauthProvider,
+        issuerUrl: new URL(issuerUrl),
+        baseUrl: serverUrl,
+        scopesSupported: this.config.oauthConfig!.scopes,
+        resourceServerUrl: serverUrl,
+        resourceName: 'MCP Server',
+      }));
+
+      this.logger.info('OAuth routes registered');
+    }
 
     // Security: Rate limiting setup
     const rateLimitEnabled = this.config.rateLimitEnabled !== false; // default: true

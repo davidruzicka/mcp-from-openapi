@@ -66,12 +66,98 @@ export interface InterceptorConfig {
  * - bearer: Standard HTTP Bearer token (Authorization: Bearer <token>)
  * - query: API key in query string (?api_key=<token>)
  * - custom-header: Custom header name (e.g., X-API-Key: <token>)
+ * - oauth: OAuth 2.0 Authorization Code Flow with PKCE (HTTP transport only)
  */
 export interface AuthInterceptor {
-  type: 'bearer' | 'query' | 'custom-header';
+  type: 'bearer' | 'query' | 'custom-header' | 'oauth';
+  
+  // For bearer/query/custom-header
   header_name?: string;  // Required for custom-header
   query_param?: string;  // Required for query
-  value_from_env: string;
+  value_from_env?: string; // Required for bearer/query/custom-header, not used for oauth
+  
+  // For oauth type
+  oauth_config?: OAuthConfig;
+}
+
+/**
+ * OAuth 2.0 configuration
+ * 
+ * Supports Authorization Code Flow with PKCE (RFC 7636)
+ * Only available in HTTP transport mode
+ * 
+ * Client registration can be:
+ * - Static: pre-registered client_id and client_secret
+ * - Dynamic: RFC 7591 dynamic client registration
+ */
+export interface OAuthConfig {
+  /**
+   * OAuth 2.0 authorization endpoint
+   * e.g., "https://gitlab.example.com/oauth/authorize"
+   * 
+   * Can reference environment variables: "${env:OAUTH_AUTHORIZATION_URL}"
+   */
+  authorization_endpoint: string;
+  
+  /**
+   * OAuth 2.0 token endpoint
+   * e.g., "https://gitlab.example.com/oauth/token"
+   * 
+   * Can reference environment variables: "${env:OAUTH_TOKEN_URL}"
+   */
+  token_endpoint: string;
+  
+  /**
+   * Pre-registered OAuth client ID (for static client registration)
+   * Optional - if not provided, uses dynamic client registration (RFC 7591)
+   * 
+   * Can reference environment variables: "${env:OAUTH_CLIENT_ID}"
+   */
+  client_id?: string;
+  
+  /**
+   * Pre-registered OAuth client secret (for static client registration)
+   * Optional - only needed for confidential clients
+   * 
+   * Can reference environment variables: "${env:OAUTH_CLIENT_SECRET}"
+   */
+  client_secret?: string;
+  
+  /**
+   * OAuth 2.0 scopes to request
+   * e.g., ["api", "read_user", "write_repository"]
+   */
+  scopes: string[];
+  
+  /**
+   * Redirect URI for OAuth callback
+   * Defaults to: http://{MCP_HOST}:{MCP_PORT}/oauth/callback
+   * 
+   * Must match URI registered with OAuth provider
+   */
+  redirect_uri?: string;
+  
+  /**
+   * Optional: Client registration endpoint for dynamic registration (RFC 7591)
+   * e.g., "https://gitlab.example.com/oauth/register"
+   * 
+   * If provided and client_id is not set, will attempt dynamic client registration
+   */
+  registration_endpoint?: string;
+  
+  /**
+   * Optional: Token introspection endpoint (RFC 7662)
+   * e.g., "https://gitlab.example.com/oauth/introspect"
+   * 
+   * Used for token validation
+   */
+  introspection_endpoint?: string;
+  
+  /**
+   * Optional: Token revocation endpoint (RFC 7009)
+   * e.g., "https://gitlab.example.com/oauth/revoke"
+   */
+  revocation_endpoint?: string;
 }
 
 export interface BaseUrlConfig {

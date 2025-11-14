@@ -109,8 +109,9 @@ export class HttpClientFactory {
       return config.sessionToken;
     }
 
-    if (config.profile.interceptors?.auth) {
-      return process.env[config.profile.interceptors.auth.value_from_env];
+    const authConfig = config.profile.interceptors?.auth;
+    if (authConfig && authConfig.value_from_env) {
+      return process.env[authConfig.value_from_env];
     }
 
     return undefined;

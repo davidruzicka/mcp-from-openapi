@@ -114,6 +114,7 @@ describe('profile-schema.json', () => {
       'bearer',
       'query',
       'custom-header',
+      'oauth',
     ]);
   });
 
@@ -141,6 +142,181 @@ describe('profile-schema.json', () => {
     const valid = validate(invalidAuth);
 
     expect(valid).toBe(false);
+  });
+
+  it('should validate OAuth auth configuration', () => {
+    const validOAuth = {
+      profile_name: 'test-oauth',
+      tools: [
+        {
+          name: 'test_tool',
+          description: 'Test tool for OAuth validation',
+          operations: { list: 'listOp' },
+          parameters: {},
+        },
+      ],
+      interceptors: {
+        auth: {
+          type: 'oauth',
+          oauth_config: {
+            authorization_endpoint: 'https://oauth.example.com/authorize',
+            token_endpoint: 'https://oauth.example.com/token',
+            scopes: ['api', 'read_user'],
+          },
+        },
+      },
+    };
+
+    const validate = ajv.compile(profileSchema);
+    const valid = validate(validOAuth);
+
+    if (!valid) {
+      console.log('Validation errors:', validate.errors);
+    }
+
+    expect(valid).toBe(true);
+  });
+
+  it('should reject OAuth without required oauth_config', () => {
+    const invalidOAuth = {
+      profile_name: 'test-oauth',
+      tools: [
+        {
+          name: 'test_tool',
+          description: 'Test tool for OAuth validation',
+          operations: { list: 'listOp' },
+          parameters: {},
+        },
+      ],
+      interceptors: {
+        auth: {
+          type: 'oauth',
+          // Missing oauth_config
+        },
+      },
+    };
+
+    const validate = ajv.compile(profileSchema);
+    const valid = validate(invalidOAuth);
+
+    expect(valid).toBe(false);
+    expect(validate.errors).toBeDefined();
+  });
+
+  it('should reject OAuth config without required fields', () => {
+    const invalidOAuthConfig = {
+      profile_name: 'test-oauth',
+      tools: [
+        {
+          name: 'test_tool',
+          description: 'Test tool for OAuth validation',
+          operations: { list: 'listOp' },
+          parameters: {},
+        },
+      ],
+      interceptors: {
+        auth: {
+          type: 'oauth',
+          oauth_config: {
+            authorization_endpoint: 'https://oauth.example.com/authorize',
+            // Missing token_endpoint and scopes
+          },
+        },
+      },
+    };
+
+    const validate = ajv.compile(profileSchema);
+    const valid = validate(invalidOAuthConfig);
+
+    expect(valid).toBe(false);
+    expect(validate.errors).toBeDefined();
+  });
+
+  it('should allow optional OAuth config fields', () => {
+    const validOAuthWithOptional = {
+      profile_name: 'test-oauth',
+      tools: [
+        {
+          name: 'test_tool',
+          description: 'Test tool for OAuth validation',
+          operations: { list: 'listOp' },
+          parameters: {},
+        },
+      ],
+      interceptors: {
+        auth: {
+          type: 'oauth',
+          oauth_config: {
+            authorization_endpoint: 'https://oauth.example.com/authorize',
+            token_endpoint: 'https://oauth.example.com/token',
+            client_id: '${env:CLIENT_ID}',
+            client_secret: '${env:CLIENT_SECRET}',
+            scopes: ['api'],
+            redirect_uri: 'http://localhost:3003/oauth/callback',
+            introspection_endpoint: 'https://oauth.example.com/introspect',
+            revocation_endpoint: 'https://oauth.example.com/revoke',
+          },
+        },
+      },
+    };
+
+    const validate = ajv.compile(profileSchema);
+    const valid = validate(validOAuthWithOptional);
+
+    if (!valid) {
+      console.log('Validation errors:', validate.errors);
+    }
+
+    expect(valid).toBe(true);
+  });
+
+  it('should validate GitLab OAuth example profile', () => {
+    const gitlabOAuthProfile = {
+      $schema: '../../profile-schema.json',
+      profile_name: 'gitlab-oauth',
+      description: 'GitLab API with OAuth 2.0 authentication',
+      tools: [
+        {
+          name: 'manage_projects',
+          description: 'Work with GitLab projects',
+          operations: {
+            list: 'getApiV4Projects',
+            get: 'getApiV4ProjectsId',
+          },
+          metadata_params: ['action'],
+          parameters: {
+            action: {
+              type: 'string',
+              enum: ['list', 'get'],
+              description: 'Action to perform',
+              required: true,
+            },
+          },
+        },
+      ],
+      interceptors: {
+        auth: {
+          type: 'oauth',
+          oauth_config: {
+            authorization_endpoint: '${env:GITLAB_OAUTH_AUTHORIZATION_URL}',
+            token_endpoint: '${env:GITLAB_OAUTH_TOKEN_URL}',
+            client_id: '${env:GITLAB_OAUTH_CLIENT_ID}',
+            client_secret: '${env:GITLAB_OAUTH_CLIENT_SECRET}',
+            scopes: ['api', 'read_user'],
+            redirect_uri: 'http://localhost:3003/oauth/callback',
+          },
+        },
+      },
+    };
+
+    const validate = ajv.compile(profileSchema);
+    const valid = validate(gitlabOAuthProfile);
+
+    if (!valid) {
+      console.log('Validation errors:', validate.errors);
+    }
+
+    expect(valid).toBe(true);
   });
 });
 

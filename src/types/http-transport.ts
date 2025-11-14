@@ -6,6 +6,7 @@
  */
 
 import type { Request as ExpressRequest, Response } from 'express';
+import type { OAuthConfig } from './profile.js';
 
 export interface SessionData {
   id: string;
@@ -43,6 +44,7 @@ export interface HttpTransportConfig {
   rateLimitMaxRequests?: number; // Max requests per window (default: 100)
   rateLimitMetricsMax?: number; // Max requests for /metrics (default: 10)
   maxTokenLength?: number; // Maximum token length in characters (default: 1000)
+  oauthConfig?: OAuthConfig; // OAuth 2.0 configuration (optional)
 }
 
 export interface McpRequest extends ExpressRequest {

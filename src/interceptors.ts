@@ -62,11 +62,22 @@ export class InterceptorChain {
    */
   private createAuthInterceptor(): InterceptorFn {
     const authConfig = this.config.auth!;
-    const token = this.authToken || process.env[authConfig.value_from_env];
+    
+    // OAuth uses different authentication flow, skip for now
+    if (authConfig.type === 'oauth') {
+      throw new Error('OAuth authentication not supported in InterceptorChain (use HTTP transport OAuth flow)');
+    }
+    
+    const envVarName = authConfig.value_from_env;
+    if (!envVarName) {
+      throw new Error('Auth configuration missing value_from_env');
+    }
+    
+    const token = this.authToken || process.env[envVarName];
 
     if (!token) {
       throw new Error(
-        `Auth token not found. Expected in environment variable: ${authConfig.value_from_env} or passed to constructor`
+        `Auth token not found. Expected in environment variable: ${envVarName} or passed to constructor`
       );
     }
 
