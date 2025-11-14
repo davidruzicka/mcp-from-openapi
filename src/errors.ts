@@ -95,6 +95,20 @@ export function isMCPError(error: unknown): error is MCPError {
 }
 
 /**
+ * Generate a unique correlation ID for error tracking
+ * 
+ * Why: Allows matching client-reported errors with server logs
+ */
+export function generateCorrelationId(): string {
+  // Simple UUID v4 implementation
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+/**
  * Helper function to get error details for logging
  */
 export function getErrorDetails(error: unknown): Record<string, unknown> {

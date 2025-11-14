@@ -7,6 +7,7 @@
 
 import type { InterceptorConfig } from './types/profile.js';
 import { TIME, HTTP_STATUS } from './constants.js';
+import { AuthenticationError, AuthorizationError, NetworkError, RateLimitError } from './errors.js';
 
 export interface RequestContext {
   method: string;
@@ -307,12 +308,31 @@ export class HttpClient {
       };
 
       // Why throw on non-2xx: Allows caller to handle errors with try/catch
+      // Use structured errors for better client handling
       if (response.status < HTTP_STATUS.OK || response.status >= HTTP_STATUS.MULTIPLE_CHOICES) {
-        // Don't leak response body in error message (may contain sensitive data)
-        const bodyPreview = typeof body === 'string' 
-          ? body.substring(0, 100)
-          : JSON.stringify(body).substring(0, 100);
-        throw new Error(`HTTP ${response.status}: ${bodyPreview}${bodyPreview.length >= 100 ? '...' : ''}`);
+        // Extract error message from response body (common formats)
+        let errorMessage = `HTTP ${response.status}`;
+        if (typeof body === 'object' && body !== null) {
+          const errorObj = body as Record<string, unknown>;
+          errorMessage = (errorObj.error_description || errorObj.error || errorObj.message || errorMessage) as string;
+        } else if (typeof body === 'string' && body.length > 0) {
+          errorMessage = body;
+        }
+
+        // Throw specific error types based on HTTP status
+        if (response.status === HTTP_STATUS.UNAUTHORIZED) {
+          throw new AuthenticationError(errorMessage, { statusCode: response.status });
+        } else if (response.status === HTTP_STATUS.FORBIDDEN) {
+          throw new AuthorizationError(errorMessage);
+        } else if (response.status === HTTP_STATUS.TOO_MANY_REQUESTS) {
+          const retryAfter = response.headers.get('retry-after');
+          throw new RateLimitError(errorMessage, retryAfter ? parseInt(retryAfter, 10) : undefined);
+        } else if (response.status === HTTP_STATUS.NOT_FOUND) {
+          throw new NetworkError(`Resource not found: ${errorMessage}`, response.status);
+        } else {
+          // Generic network error for other status codes (includes 5xx)
+          throw new NetworkError(errorMessage, response.status, { body });
+        }
       }
 
       return responseContext;

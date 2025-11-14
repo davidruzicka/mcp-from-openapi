@@ -16,7 +16,17 @@ import { OpenAPIParser } from './openapi-parser.js';
 import { ProfileLoader } from './profile-loader.js';
 import { ToolGenerator } from './tool-generator.js';
 import { CompositeExecutor } from './composite-executor.js';
-import { ConfigurationError, OperationNotFoundError, ValidationError, AuthenticationError } from './errors.js';
+import { 
+  ConfigurationError, 
+  OperationNotFoundError, 
+  ValidationError, 
+  AuthenticationError,
+  AuthorizationError,
+  RateLimitError,
+  NetworkError,
+  generateCorrelationId,
+  isMCPError
+} from './errors.js';
 import { InterceptorChain, HttpClient } from './interceptors.js';
 import { HttpClientFactory } from './http-client-factory.js';
 import { SchemaValidator } from './schema-validator.js';
@@ -61,6 +71,59 @@ export class MCPServer {
     return filtered;
   }
 
+  /**
+   * Format error message for client with correlation ID
+   * 
+   * Why: Categorize errors as "safe" (4xx client errors) vs "unsafe" (5xx server errors)
+   * Safe errors show API message to help user fix the issue
+   * Unsafe errors show generic message to avoid leaking sensitive info
+   */
+  private formatErrorForClient(error: unknown, correlationId: string): string {
+    // Authentication errors - safe to show (token expired, invalid credentials)
+    if (error instanceof AuthenticationError) {
+      return `Authentication failed: ${error.message} (correlation ID: ${correlationId})`;
+    }
+
+    // Authorization errors - safe to show (insufficient permissions)
+    if (error instanceof AuthorizationError) {
+      return `Authorization failed: ${error.message} (correlation ID: ${correlationId})`;
+    }
+
+    // Rate limit errors - safe to show (helps user understand backoff)
+    if (error instanceof RateLimitError) {
+      const retryInfo = error.details?.retryAfter 
+        ? ` Retry after ${error.details.retryAfter} seconds.`
+        : '';
+      return `Rate limit exceeded: ${error.message}${retryInfo} (correlation ID: ${correlationId})`;
+    }
+
+    // Network errors with 4xx status - safe to show (client errors)
+    if (error instanceof NetworkError && error.details?.statusCode) {
+      const statusCode = error.details.statusCode as number;
+      if (statusCode >= 400 && statusCode < 500) {
+        return `Request failed: ${error.message} (correlation ID: ${correlationId})`;
+      }
+    }
+
+    // Validation errors - safe to show (helps user fix input)
+    if (error instanceof ValidationError) {
+      return `Validation error: ${error.message} (correlation ID: ${correlationId})`;
+    }
+
+    // Operation not found - safe to show (configuration issue)
+    if (error instanceof OperationNotFoundError) {
+      return `Operation not found: ${error.message} (correlation ID: ${correlationId})`;
+    }
+
+    // Configuration errors - safe to show (helps admin fix setup)
+    if (error instanceof ConfigurationError) {
+      return `Configuration error: ${error.message} (correlation ID: ${correlationId})`;
+    }
+
+    // Generic/unknown errors - hide details, show only correlation ID
+    return `Internal error (correlation ID: ${correlationId})`;
+  }
+
   constructor(logger?: Logger) {
     this.logger = logger || new ConsoleLogger();
     this.schemaValidator = new SchemaValidator();
@@ -87,7 +150,7 @@ export class MCPServer {
     await this.parser.load(specPath);
     this.logger.info('Loaded OpenAPI spec', { specPath });
 
-    // Load profile
+    // Load or create MCP profile
     if (profilePath) {
       const loader = new ProfileLoader();
       this.profile = await loader.load(profilePath);
@@ -285,9 +348,11 @@ export class MCPServer {
 
         return { tools };
       } catch (err) {
-        this.logger.error('ListTools handler error', err as Error);
+        // Generate correlation ID only on error (lazy)
+        const correlationId = generateCorrelationId();
+        this.logger.error('ListTools handler error', err as Error, { correlationId });
         // Always return generic error to clients
-        throw new Error('Internal error');
+        throw new Error(`Internal error (correlation ID: ${correlationId})`);
       }
     });
 
@@ -341,9 +406,17 @@ export class MCPServer {
           ],
         };
       } catch (err) {
-        this.logger.error('CallTool handler error', err as Error);
-        // Throw generic error for stdio clients
-        throw new Error('Internal error');
+        // Generate correlation ID only on error (lazy)
+        const correlationId = generateCorrelationId();
+        this.logger.error('CallTool handler error', err as Error, { 
+          correlationId,
+          toolName: request.params.name,
+          action: (request.params.arguments as Record<string, unknown>)?.action
+        });
+        
+        // Return user-friendly error message with correlation ID
+        const errorMessage = this.formatErrorForClient(err, correlationId);
+        throw new Error(errorMessage);
       }
     });
   }
@@ -691,19 +764,41 @@ export class MCPServer {
         },
       };
     } catch (error) {
-      // Log internal error details, but return generic message to client
+      // Generate correlation ID only on error (lazy)
+      const correlationId = generateCorrelationId();
+      
+      // Log internal error details with correlation ID
       this.logger.error('Tool call error', error as Error, {
+        correlationId,
         toolName,
         action: args?.action,
         resourceType: args?.resource_type,
         sessionId
       });
+      
+      // Return user-friendly error message with correlation ID
+      const errorMessage = this.formatErrorForClient(error, correlationId);
+      
+      // Map error type to JSON-RPC error code
+      let errorCode = -32603; // Internal error (default)
+      if (error instanceof AuthenticationError) {
+        errorCode = -32001; // Authentication error
+      } else if (error instanceof AuthorizationError) {
+        errorCode = -32002; // Authorization error
+      } else if (error instanceof ValidationError) {
+        errorCode = -32602; // Invalid params
+      } else if (error instanceof RateLimitError) {
+        errorCode = -32003; // Rate limit error
+      } else if (error instanceof OperationNotFoundError) {
+        errorCode = -32601; // Method not found
+      }
+      
       return {
         jsonrpc: '2.0',
         id: req.id,
         error: {
-          code: -32603,
-          message: 'Internal error',
+          code: errorCode,
+          message: errorMessage,
         },
       };
     }

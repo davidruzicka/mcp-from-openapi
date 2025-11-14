@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { HttpClient, InterceptorChain } from './interceptors.js';
 import { createTestHttpClient, setupFetchMock, setupErrorFetchMock, setupNetworkErrorFetchMock, setupRateLimitFetchMock } from './testing/test-http-utils.js';
 import type { InterceptorConfig } from './types/profile.js';
+import { AuthenticationError, AuthorizationError, RateLimitError, NetworkError } from './errors.js';
 
 describe('HttpClient - Auth Interceptors', () => {
   const originalEnv = { ...process.env };
@@ -419,9 +420,10 @@ describe('HttpClient - Retry Logic', () => {
 
     setupErrorFetchMock(502);
 
+    // Now throws NetworkError instead of plain Error with 'HTTP 502'
     await expect(
       client.request('GET', '/test')
-    ).rejects.toThrow('HTTP 502');
+    ).rejects.toThrow(NetworkError);
   });
 });
 
@@ -473,6 +475,225 @@ describe('HttpClient - Array Serialization', () => {
     });
 
     expect(decodeURIComponent(capturedUrl)).toContain('scope=a,b,c');
+  });
+});
+
+describe('HttpClient - Structured Error Handling', () => {
+  const originalEnv = { ...process.env };
+
+  beforeEach(() => {
+    process.env = { ...originalEnv };
+    process.env.API_TOKEN = 'test-token';
+  });
+
+  afterEach(() => {
+    process.env = originalEnv;
+  });
+
+  it('should throw AuthenticationError on 401 status', async () => {
+    const config: InterceptorConfig = {
+      auth: { type: 'bearer', value_from_env: 'API_TOKEN' },
+    };
+
+    const client = createTestHttpClient('https://api.example.com', config);
+
+    global.fetch = async () => {
+      return new Response(
+        JSON.stringify({ 
+          error: 'invalid_token',
+          error_description: 'Token is expired. You can either do re-authorization or...'
+        }),
+        {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    };
+
+    await expect(client.request('GET', '/test'))
+      .rejects
+      .toThrow(AuthenticationError);
+
+    await expect(client.request('GET', '/test'))
+      .rejects
+      .toThrow('Token is expired');
+  });
+
+  it('should throw AuthorizationError on 403 status', async () => {
+    const config: InterceptorConfig = {
+      auth: { type: 'bearer', value_from_env: 'API_TOKEN' },
+    };
+
+    const client = createTestHttpClient('https://api.example.com', config);
+
+    global.fetch = async () => {
+      return new Response(
+        JSON.stringify({ message: 'Insufficient permissions' }),
+        {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    };
+
+    await expect(client.request('GET', '/test'))
+      .rejects
+      .toThrow(AuthorizationError);
+
+    await expect(client.request('GET', '/test'))
+      .rejects
+      .toThrow('Insufficient permissions');
+  });
+
+  it('should throw RateLimitError on 429 status', async () => {
+    const config: InterceptorConfig = {
+      auth: { type: 'bearer', value_from_env: 'API_TOKEN' },
+    };
+
+    const client = createTestHttpClient('https://api.example.com', config);
+
+    global.fetch = async () => {
+      return new Response(
+        JSON.stringify({ message: 'Rate limit exceeded' }),
+        {
+          status: 429,
+          headers: { 
+            'Content-Type': 'application/json',
+            'Retry-After': '60'
+          },
+        }
+      );
+    };
+
+    try {
+      await client.request('GET', '/test');
+      expect.fail('Should have thrown RateLimitError');
+    } catch (error) {
+      expect(error).toBeInstanceOf(RateLimitError);
+      expect((error as RateLimitError).details?.retryAfter).toBe(60);
+    }
+  });
+
+  it('should throw NetworkError on 404 status', async () => {
+    const config: InterceptorConfig = {
+      auth: { type: 'bearer', value_from_env: 'API_TOKEN' },
+    };
+
+    const client = createTestHttpClient('https://api.example.com', config);
+
+    global.fetch = async () => {
+      return new Response(
+        JSON.stringify({ message: 'Not found' }),
+        {
+          status: 404,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    };
+
+    await expect(client.request('GET', '/test'))
+      .rejects
+      .toThrow(NetworkError);
+
+    await expect(client.request('GET', '/test'))
+      .rejects
+      .toThrow('Resource not found');
+  });
+
+  it('should throw NetworkError on 500 status with body included', async () => {
+    const config: InterceptorConfig = {
+      auth: { type: 'bearer', value_from_env: 'API_TOKEN' },
+    };
+
+    const client = createTestHttpClient('https://api.example.com', config);
+
+    global.fetch = async () => {
+      return new Response(
+        JSON.stringify({ error: 'Internal server error', details: 'Database connection failed' }),
+        {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    };
+
+    try {
+      await client.request('GET', '/test');
+      expect.fail('Should have thrown NetworkError');
+    } catch (error) {
+      expect(error).toBeInstanceOf(NetworkError);
+      expect((error as NetworkError).details?.statusCode).toBe(500);
+      expect((error as NetworkError).details?.body).toBeDefined();
+    }
+  });
+
+  it('should extract error_description from response body', async () => {
+    const config: InterceptorConfig = {
+      auth: { type: 'bearer', value_from_env: 'API_TOKEN' },
+    };
+
+    const client = createTestHttpClient('https://api.example.com', config);
+
+    global.fetch = async () => {
+      return new Response(
+        JSON.stringify({ 
+          error: 'invalid_grant',
+          error_description: 'The provided authorization grant is invalid'
+        }),
+        {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    };
+
+    await expect(client.request('GET', '/test'))
+      .rejects
+      .toThrow('The provided authorization grant is invalid');
+  });
+
+  it('should extract error field from response body', async () => {
+    const config: InterceptorConfig = {
+      auth: { type: 'bearer', value_from_env: 'API_TOKEN' },
+    };
+
+    const client = createTestHttpClient('https://api.example.com', config);
+
+    global.fetch = async () => {
+      return new Response(
+        JSON.stringify({ error: 'Bad Request' }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    };
+
+    await expect(client.request('GET', '/test'))
+      .rejects
+      .toThrow('Bad Request');
+  });
+
+  it('should extract message field from response body', async () => {
+    const config: InterceptorConfig = {
+      auth: { type: 'bearer', value_from_env: 'API_TOKEN' },
+    };
+
+    const client = createTestHttpClient('https://api.example.com', config);
+
+    global.fetch = async () => {
+      return new Response(
+        JSON.stringify({ message: 'Validation failed' }),
+        {
+          status: 422,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      );
+    };
+
+    await expect(client.request('GET', '/test'))
+      .rejects
+      .toThrow('Validation failed');
   });
 });
 
