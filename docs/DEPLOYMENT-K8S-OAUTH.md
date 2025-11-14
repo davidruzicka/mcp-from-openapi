@@ -473,52 +473,51 @@ kubectl -n mcp-gitlab get ingress
 
 ## Krok 5: Konfigurace pro Uživatele
 
-### Pro Cursor
+### Pro Cursor (✅ OAuth podporováno)
 
-Každý kolega si přidá do `.cursor/mcp.json` (v home directory nebo v projektu):
-
-```json
-{
-  "mcpServers": {
-    "gitlab-production": {
-      "command": "npx",
-      "args": [
-        "@modelcontextprotocol/client-stdio",
-        "https://mcp-gitlab.ai.iszn.cz/mcp"
-      ]
-    }
-  }
-}
-```
-
-**Nebo pro HTTP MCP client (pokud Cursor podporuje):**
+Každý kolega si přidá do `.cursor/mcp.json` (v home directory: `~/.cursor/mcp.json`):
 
 ```json
 {
   "mcpServers": {
     "gitlab-production": {
-      "url": "https://mcp-gitlab.ai.iszn.cz/mcp",
-      "transport": "http"
+      "url": "https://mcp-gitlab.ai.iszn.cz/mcp"
     }
   }
 }
 ```
 
-⚠️ **Poznámka**: Aktuální verze Cursor/VS Code možná ještě nemají plnou podporu pro remote HTTP MCP servery. Sleduj:
-- https://docs.cursor.com/en/context/mcp
-- https://github.com/modelcontextprotocol/
+**To je vše!** Žádné tokeny, žádné credentials.
+
+### Pro VS Code
+
+V `.vscode/mcp.json` nebo `~/.config/Code/User/mcp.json`:
+
+```json
+{
+  "servers": {
+    "gitlab-production": {
+      "url": "https://mcp-gitlab.ai.iszn.cz/mcp"
+    }
+  }
+}
+```
+
+✅ **Cursor automaticky detekuje OAuth** z `/.well-known/oauth-authorization-server` a zobrazí tlačítko "Connect"
 
 ### OAuth Flow pro Uživatele
 
 1. Uživatel otevře Cursor/VS Code
-2. Pokusí se použít GitLab MCP tool
-3. **Zobrazí se tlačítko "Connect" nebo URL pro autorizaci**
-4. Uživatel klikne → otevře se browser
-5. Browser přesměrován na: `https://gitlab.seznam.net/oauth/authorize?...`
-6. Uživatel se přihlásí a klikne "Authorize"
+2. V MCP section uvidí "gitlab-production" server
+3. **Zobrazí se tlačítko "Connect"** (Cursor detekuje OAuth automaticky)
+4. Uživatel klikne → otevře se browser na `https://mcp-gitlab.ai.iszn.cz/oauth/authorize`
+5. Server přesměruje na: `https://gitlab.seznam.net/oauth/authorize?...`
+6. Uživatel se přihlásí do GitLabu a klikne "Authorize"
 7. GitLab přesměruje zpět na: `https://mcp-gitlab.ai.iszn.cz/oauth/authorize?code=...`
 8. MCP server vymění code za access token
-9. **Uživatel je připojen** - může používat GitLab tools
+9. **Uživatel je připojen** - může používat GitLab tools! 🎉
+
+⚠️ **Každý uživatel má vlastní OAuth session** - tokeny nejsou sdílené mezi uživateli.
 
 ## Krok 6: Monitoring & Troubleshooting
 

@@ -30,7 +30,7 @@ import {
 import { InterceptorChain, HttpClient } from './interceptors.js';
 import { HttpClientFactory } from './http-client-factory.js';
 import { SchemaValidator } from './schema-validator.js';
-import type { Profile, ToolDefinition, AuthInterceptor } from './types/profile.js';
+import type { Profile, ToolDefinition, AuthInterceptor, OAuthConfig } from './types/profile.js';
 import type { Logger } from './logger.js';
 import { ConsoleLogger, JsonLogger } from './logger.js';
 import type { OperationInfo } from './types/openapi.js';
@@ -170,16 +170,20 @@ export class MCPServer {
     }
 
     // Re-create logger with auth config for token redaction
-    if (this.profile.interceptors?.auth) {
-      this.logger = this.createLoggerWithAuth(this.profile.interceptors.auth);
-      this.logger.info('Logger re-configured with auth token redaction');
+    const authConfigs = this.getAuthConfigs();
+    if (authConfigs.length > 0) {
+      // Use first auth config for logger (primary)
+      this.logger = this.createLoggerWithAuth(authConfigs[0]);
+      this.logger.info('Logger re-configured with auth token redaction', {
+        authMethods: authConfigs.length,
+      });
     }
 
     // Setup HTTP client with interceptors
     // For stdio transport, create client with env token
     // For HTTP transport, clients are created per-session with user's token
     const baseUrl = this.getBaseUrl();
-    const authConfig = this.profile.interceptors?.auth;
+    const authConfig = this.getPrimaryAuthConfig();
     const hasAuth = !!authConfig;
     const envToken = hasAuth && authConfig.value_from_env ? process.env[authConfig.value_from_env] : undefined;
 
@@ -266,6 +270,37 @@ export class MCPServer {
   }
 
   /**
+   * Get auth configurations as array (supports single or multiple auth methods)
+   * Returns array sorted by priority (lower = higher priority)
+   */
+  private getAuthConfigs(): AuthInterceptor[] {
+    const auth = this.profile?.interceptors?.auth;
+    if (!auth) return [];
+    
+    const configs = Array.isArray(auth) ? auth : [auth];
+    
+    // Sort by priority (lower = higher priority)
+    return configs.sort((a, b) => (a.priority || 0) - (b.priority || 0));
+  }
+
+  /**
+   * Get primary (highest priority) auth configuration
+   */
+  private getPrimaryAuthConfig(): AuthInterceptor | undefined {
+    const configs = this.getAuthConfigs();
+    return configs[0];
+  }
+
+  /**
+   * Get OAuth configuration from auth configs (if any)
+   */
+  private getOAuthConfig(): OAuthConfig | undefined {
+    const configs = this.getAuthConfigs();
+    const oauthConfig = configs.find(c => c.type === 'oauth');
+    return oauthConfig?.oauth_config;
+  }
+
+  /**
    * Get or create HTTP client for session
    */
   private getHttpClientForSession(sessionId?: string): HttpClient {
@@ -274,7 +309,7 @@ export class MCPServer {
       if (!this.httpClientFactory.hasGlobalClient()) {
         const hasHttpTransport = !!this.httpTransport;
         const transport = hasHttpTransport ? 'http' : 'stdio';
-        const authConfig = this.profile?.interceptors?.auth;
+        const authConfig = this.getPrimaryAuthConfig();
         const envVarName = authConfig?.value_from_env || 'API_TOKEN';
         const hasEnvToken = !!process.env[envVarName];
 
@@ -625,10 +660,9 @@ export class MCPServer {
   async runHttp(host: string, port: number): Promise<void> {
     const { HttpTransport } = await import('./http-transport.js');
     
-    // Get OAuth config from profile if auth type is oauth
-    let oauthConfig: any = undefined;
-    if (this.profile?.interceptors?.auth?.type === 'oauth') {
-      oauthConfig = this.profile.interceptors.auth.oauth_config;
+    // Get OAuth config from profile (supports multi-auth)
+    const oauthConfig = this.getOAuthConfig();
+    if (oauthConfig) {
       this.logger.info('OAuth authentication enabled for HTTP transport');
     }
     

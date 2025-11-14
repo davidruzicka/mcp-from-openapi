@@ -49,6 +49,7 @@ More about profiles: [docs/PROFILE-GUIDE.md](https://github.com/davidruzicka/mcp
 - **Tool Aggregation**: Reduce tool clutter - group related operations in profiles
 - **Composite Actions**: Chain API calls into workflows in profiles
 - **OAuth 2.0**: Browser-based authentication flow for HTTP transport (see [docs/OAUTH.md](./docs/OAUTH.md))
+- **Multi-Auth**: Support multiple auth methods (OAuth + Bearer) with priority-based fallback (see [docs/MULTI-AUTH.md](./docs/MULTI-AUTH.md))
 - **Observability**: Structured logging (console/JSON) with profile-aware token redaction, Prometheus metrics
 
 Check example profiles in [profiles/](https://github.com/davidruzicka/mcp4openapi/tree/main/profiles).
@@ -478,6 +479,7 @@ npm test
 - **[docs/PROFILE-GUIDE.md](./docs/PROFILE-GUIDE.md)** - Guide for creating custom profiles
 - **[docs/HTTP-TRANSPORT.md](./docs/HTTP-TRANSPORT.md)** - HTTP transport setup and usage
 - **[docs/OAUTH.md](./docs/OAUTH.md)** - OAuth 2.0 authentication setup guide
+- **[docs/MULTI-AUTH.md](./docs/MULTI-AUTH.md)** - Multi-auth support: OAuth + Bearer tokens
 - **[docs/DEPLOYMENT-K8S-OAUTH.md](./docs/DEPLOYMENT-K8S-OAUTH.md)** - Production deployment: Kubernetes + OAuth
 - **[docs/DOCKER.md](./docs/DOCKER.md)** - Docker deployment guide
 - **`profiles/`** - Example profiles for OpenAPI specs

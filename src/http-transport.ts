@@ -443,10 +443,23 @@ export class HttpTransport {
    * Supports:
    * - Authorization: Bearer <token>
    * - X-API-Token: <token>
+   * - OAuth session (via mcp-session-id header)
    * 
    * Why strict validation: Prevents header injection attacks
+   * 
+   * Returns: { type: 'bearer' | 'oauth' | 'api-token', token: string, sessionId?: string }
    */
-  private extractAuthToken(req: McpRequest): string | undefined {
+  private extractAuthToken(req: McpRequest): { type: 'bearer' | 'oauth' | 'api-token' | 'none', token?: string, sessionId?: string } {
+    // 1. Check for OAuth session first (highest priority for authenticated sessions)
+    const sessionId = req.sessionId || req.headers['mcp-session-id'] as string | undefined;
+    if (sessionId && this.sessions.has(sessionId)) {
+      const session = this.sessions.get(sessionId);
+      if (session && session.authToken) {
+        return { type: 'oauth', token: session.authToken, sessionId };
+      }
+    }
+    
+    // 2. Check Authorization: Bearer header
     const authHeader = req.headers.authorization;
     if (authHeader) {
       // Relaxed Bearer token format validation - allow flexible whitespace
@@ -458,19 +471,20 @@ export class HttpTransport {
       }
       const token = match[1].trim();
       this.validateToken(token, 'Authorization token');
-      return token;
+      return { type: 'bearer', token };
     }
     
+    // 3. Check X-API-Token header (for custom implementations)
     const apiTokenHeader = req.headers['x-api-token'];
     if (apiTokenHeader) {
       if (typeof apiTokenHeader !== 'string') {
         throw new Error('X-API-Token must be a string');
       }
       this.validateToken(apiTokenHeader, 'X-API-Token');
-      return apiTokenHeader;
+      return { type: 'api-token', token: apiTokenHeader };
     }
     
-    return undefined;
+    return { type: 'none' };
   }
 
   /**
@@ -530,8 +544,8 @@ export class HttpTransport {
         let newSessionId: string | undefined;
         if (isInitialization) {
           // Extract and validate auth token from headers
-          const authToken = this.extractAuthToken(req);
-          newSessionId = this.createSession(authToken);
+          const authInfo = this.extractAuthToken(req);
+          newSessionId = this.createSession(authInfo.token);
         }
 
         const response = await this.messageHandler(body, isInitialization ? newSessionId : sessionId);

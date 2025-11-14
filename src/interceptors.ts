@@ -59,11 +59,24 @@ export class InterceptorChain {
    * - bearer: Standard HTTP Authorization: Bearer <token>
    * - query: API key in URL (?api_key=<token>)
    * - custom-header: Custom header (e.g., X-API-Key: <token>)
+   * 
+   * Note: For multi-auth, uses the primary (first/lowest priority) non-OAuth config.
+   * OAuth is handled separately in HTTP transport, not in InterceptorChain.
    */
   private createAuthInterceptor(): InterceptorFn {
-    const authConfig = this.config.auth!;
+    const authConfigRaw = this.config.auth!;
     
-    // OAuth uses different authentication flow, skip for now
+    // Handle multi-auth: get primary non-OAuth config
+    const authConfigs = Array.isArray(authConfigRaw) ? authConfigRaw : [authConfigRaw];
+    const sortedConfigs = authConfigs.sort((a, b) => (a.priority || 0) - (b.priority || 0));
+    
+    // Find first non-OAuth config (OAuth handled by HTTP transport)
+    const authConfig = sortedConfigs.find(c => c.type !== 'oauth');
+    
+    if (!authConfig) {
+      throw new Error('No non-OAuth authentication configured for InterceptorChain. OAuth requires HTTP transport.');
+    }
+    
     if (authConfig.type === 'oauth') {
       throw new Error('OAuth authentication not supported in InterceptorChain (use HTTP transport OAuth flow)');
     }

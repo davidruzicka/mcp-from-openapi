@@ -109,7 +109,16 @@ export class HttpClientFactory {
       return config.sessionToken;
     }
 
-    const authConfig = config.profile.interceptors?.auth;
+    const authConfigRaw = config.profile.interceptors?.auth;
+    if (!authConfigRaw) {
+      return undefined;
+    }
+
+    // Handle multi-auth: get primary non-OAuth config
+    const authConfigs = Array.isArray(authConfigRaw) ? authConfigRaw : [authConfigRaw];
+    const sortedConfigs = authConfigs.sort((a, b) => (a.priority || 0) - (b.priority || 0));
+    const authConfig = sortedConfigs.find(c => c.type !== 'oauth');
+
     if (authConfig && authConfig.value_from_env) {
       return process.env[authConfig.value_from_env];
     }
@@ -140,7 +149,10 @@ export class HttpClientFactory {
     // Check if we have any auth token available
     const hasToken = this.getAuthToken(config);
     if (!hasToken && config.profile.interceptors?.auth) {
-      const envVar = config.profile.interceptors.auth.value_from_env;
+      const authConfigRaw = config.profile.interceptors.auth;
+      const authConfigs = Array.isArray(authConfigRaw) ? authConfigRaw : [authConfigRaw];
+      const nonOAuthConfig = authConfigs.find(c => c.type !== 'oauth');
+      const envVar = nonOAuthConfig?.value_from_env || 'API_TOKEN';
       throw new AuthenticationError(
         `No auth token available. Expected token in Authorization header or ${envVar} env var`,
         { envVar }

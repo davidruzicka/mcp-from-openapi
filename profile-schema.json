@@ -217,7 +217,19 @@
       "description": "HTTP interceptor configuration (auth, rate limiting, retry)",
       "properties": {
         "auth": {
-          "$ref": "#/definitions/Auth"
+          "oneOf": [
+            {
+              "$ref": "#/definitions/Auth"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/Auth"
+              },
+              "minItems": 1,
+              "description": "Multiple authentication methods (tried in order of priority)"
+            }
+          ]
         },
         "base_url": {
           "$ref": "#/definitions/BaseUrl"
@@ -245,6 +257,13 @@
           "type": "string",
           "enum": ["bearer", "query", "custom-header", "oauth"],
           "description": "Authentication type"
+        },
+        "priority": {
+          "type": "integer",
+          "description": "Priority for multi-auth (lower = higher priority). Default: 0. Used when multiple auth methods are configured.",
+          "default": 0,
+          "minimum": 0,
+          "examples": [0, 1, 2]
         },
         "value_from_env": {
           "type": "string",

@@ -53,7 +53,7 @@ export interface CompositeStep {
 }
 
 export interface InterceptorConfig {
-  auth?: AuthInterceptor;
+  auth?: AuthInterceptor | AuthInterceptor[]; // Single or multiple auth methods
   base_url?: BaseUrlConfig;
   rate_limit?: RateLimitConfig;
   retry?: RetryConfig;
@@ -67,9 +67,17 @@ export interface InterceptorConfig {
  * - query: API key in query string (?api_key=<token>)
  * - custom-header: Custom header name (e.g., X-API-Key: <token>)
  * - oauth: OAuth 2.0 Authorization Code Flow with PKCE (HTTP transport only)
+ * 
+ * Multi-auth support:
+ * - When multiple auth methods are provided as array, they are tried in order
+ * - priority field determines the order (lower = higher priority)
+ * - First successful authentication is used
  */
 export interface AuthInterceptor {
   type: 'bearer' | 'query' | 'custom-header' | 'oauth';
+  
+  // Priority for multi-auth (lower = higher priority, default: 0)
+  priority?: number;
   
   // For bearer/query/custom-header
   header_name?: string;  // Required for custom-header

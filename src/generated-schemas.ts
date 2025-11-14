@@ -64,6 +64,7 @@ export const toolDefinitionSchema = z.object({
 
 export const authInterceptorSchema = z.object({
     type: z.union([z.literal("bearer"), z.literal("query"), z.literal("custom-header"), z.literal("oauth")]),
+    priority: z.number().optional(),
     header_name: z.string().optional(),
     query_param: z.string().optional(),
     value_from_env: z.string().optional(),
@@ -71,7 +72,7 @@ export const authInterceptorSchema = z.object({
 });
 
 export const interceptorConfigSchema = z.object({
-    auth: authInterceptorSchema.optional(),
+    auth: z.union([authInterceptorSchema, z.array(authInterceptorSchema)]).optional(),
     base_url: baseUrlConfigSchema.optional(),
     rate_limit: rateLimitConfigSchema.optional(),
     retry: retryConfigSchema.optional(),
