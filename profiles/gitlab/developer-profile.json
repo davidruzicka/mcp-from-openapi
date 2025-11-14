@@ -567,10 +567,25 @@
 
   "interceptors": {
     "array_format": "brackets",
-    "auth": {
-      "type": "bearer",
-      "value_from_env": "API_TOKEN"
-    },
+    "auth": [
+      {
+        "type": "oauth",
+        "priority": 0,
+        "oauth_config": {
+          "authorization_endpoint": "${env:GITLAB_OAUTH_AUTHORIZATION_URL}",
+          "token_endpoint": "${env:GITLAB_OAUTH_TOKEN_URL}",
+          "client_id": "${env:GITLAB_OAUTH_CLIENT_ID}",
+          "client_secret": "${env:GITLAB_OAUTH_CLIENT_SECRET}",
+          "scopes": ["api", "read_repository"],
+          "redirect_uri": "https://mcp-gitlab.ai.iszn.cz/oauth/authorize"
+        }
+      },
+      {
+        "type": "bearer",
+        "priority": 1,
+        "value_from_env": "API_TOKEN"
+      }
+    ],
     "base_url": {
       "value_from_env": "API_BASE_URL",
       "default": "https://gitlab.com/api/v4"
