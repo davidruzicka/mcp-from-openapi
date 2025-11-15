@@ -6,7 +6,7 @@
  */
 
 import type { Request as ExpressRequest, Response } from 'express';
-import type { OAuthConfig } from './profile.js';
+import type { OAuthConfig, AuthInterceptor } from './profile.js';
 
 export interface SessionData {
   id: string;
@@ -45,6 +45,8 @@ export interface HttpTransportConfig {
   rateLimitMetricsMax?: number; // Max requests for /metrics (default: 10)
   maxTokenLength?: number; // Maximum token length in characters (default: 1000)
   oauthConfig?: OAuthConfig; // OAuth 2.0 configuration (optional)
+  baseUrl?: string; // Base URL for API (for token validation)
+  authConfigs?: AuthInterceptor[]; // Auth configurations (for token validation)
 }
 
 export interface McpRequest extends ExpressRequest {

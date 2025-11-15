@@ -90,6 +90,7 @@ stringData:
   GITLAB_OAUTH_CLIENT_SECRET: "your_secret_here"
   GITLAB_OAUTH_AUTHORIZATION_URL: "https://gitlab.seznam.net/oauth/authorize"
   GITLAB_OAUTH_TOKEN_URL: "https://gitlab.seznam.net/oauth/token"
+  GITLAB_OAUTH_REDIRECT_URI: "https://mcp-gitlab.ai.iszn.cz/oauth/callback"
   API_BASE_URL: "https://gitlab.seznam.net/api/v4"
 ```
 
@@ -178,7 +179,7 @@ data:
             "client_id": "${env:GITLAB_OAUTH_CLIENT_ID}",
             "client_secret": "${env:GITLAB_OAUTH_CLIENT_SECRET}",
             "scopes": ["api", "read_user"],
-            "redirect_uri": "https://mcp-gitlab.ai.iszn.cz/oauth/authorize"
+            "redirect_uri": "${env:GITLAB_OAUTH_REDIRECT_URI}"
           }
         },
         "base_url": {
@@ -258,6 +259,11 @@ spec:
             secretKeyRef:
               name: mcp-gitlab-oauth
               key: GITLAB_OAUTH_TOKEN_URL
+        - name: GITLAB_OAUTH_REDIRECT_URI
+          valueFrom:
+            secretKeyRef:
+              name: mcp-gitlab-oauth
+              key: GITLAB_OAUTH_REDIRECT_URI
         - name: API_BASE_URL
           valueFrom:
             secretKeyRef:
@@ -568,8 +574,9 @@ curl https://mcp-gitlab.ai.iszn.cz/health
 **Common Issues:**
 
 1. **"Redirect URI mismatch"**
-   - Zkontroluj, že v GitLab aplikaci je: `https://mcp-gitlab.ai.iszn.cz/oauth/authorize`
-   - Zkontroluj v profile: `"redirect_uri": "https://mcp-gitlab.ai.iszn.cz/oauth/authorize"`
+   - Zkontroluj, že v GitLab aplikaci je: `https://mcp-gitlab.ai.iszn.cz/oauth/callback`
+   - Zkontroluj v profile: `"redirect_uri": "${env:GITLAB_OAUTH_REDIRECT_URI}"`
+   - Zkontroluj env var: `export GITLAB_OAUTH_REDIRECT_URI=https://mcp-gitlab.ai.iszn.cz/oauth/callback`
 
 2. **"Client authentication failed"**
    - Ověř CLIENT_ID a CLIENT_SECRET v secretu

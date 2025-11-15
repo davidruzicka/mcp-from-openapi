@@ -573,7 +573,8 @@ docker run -d \
   -v path/to/profiles:/app/profiles:ro \
   -e OPENAPI_SPEC_PATH=/app/profiles/gitlab/openapi.yaml \
   -e MCP_PROFILE_PATH=/app/profiles/gitlab/developer-profile.json \
-  -e API_TOKEN=$GITLAB_TOKEN \
+  -e API_TOKEN=$API_TOKEN \
+  -e API_BASE_URL=$API_BASE_URL \
   mcp4openapi
 ```
 

@@ -46,6 +46,7 @@ GITLAB_OAUTH_AUTHORIZATION_URL=https://www.gitlab.com/oauth/authorize
 GITLAB_OAUTH_TOKEN_URL=https://www.gitlab.com/oauth/token
 GITLAB_OAUTH_CLIENT_ID=your_application_id_here
 GITLAB_OAUTH_CLIENT_SECRET=your_secret_here
+GITLAB_OAUTH_REDIRECT_URI=http://<mcp-server-url>:<mcp-server-port>/oauth/callback
 
 # API Configuration
 API_BASE_URL=https://www.gitlab.com/api/v4
@@ -93,7 +94,7 @@ Use the example profile `profiles/gitlab/oauth-profile.json`:
         "client_id": "${env:GITLAB_OAUTH_CLIENT_ID}",
         "client_secret": "${env:GITLAB_OAUTH_CLIENT_SECRET}",
         "scopes": ["api", "read_repository"],
-        "redirect_uri": "http://<mcp-server-url:port>/oauth/callback"
+        "redirect_uri": "${env:GITLAB_OAUTH_REDIRECT_URI}"
       }
     }
   }
@@ -120,7 +121,8 @@ Use the example profile `profiles/gitlab/oauth-profile.json`:
         "GITLAB_OAUTH_AUTHORIZATION_URL": "${env:GITLAB_OAUTH_AUTHORIZATION_URL}",
         "GITLAB_OAUTH_TOKEN_URL": "${env:GITLAB_OAUTH_TOKEN_URL}",
         "GITLAB_OAUTH_CLIENT_ID": "${env:GITLAB_OAUTH_CLIENT_ID}",
-        "GITLAB_OAUTH_CLIENT_SECRET": "${env:GITLAB_OAUTH_CLIENT_SECRET}"
+        "GITLAB_OAUTH_CLIENT_SECRET": "${env:GITLAB_OAUTH_CLIENT_SECRET}",
+        "GITLAB_OAUTH_REDIRECT_URI": "${env:GITLAB_OAUTH_REDIRECT_URI}"
       }
     }
   }

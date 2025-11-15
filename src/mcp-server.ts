@@ -666,6 +666,10 @@ export class MCPServer {
       this.logger.info('OAuth authentication enabled for HTTP transport');
     }
     
+    // Get auth configs for token validation
+    const authConfigs = this.getAuthConfigs();
+    const baseUrl = this.getBaseUrl();
+    
     const config = {
       host,
       port,
@@ -685,6 +689,8 @@ export class MCPServer {
         ? parseInt(process.env.TOKEN_MAX_LENGTH, 10)
         : undefined, // Uses default from http-transport.ts if undefined
       oauthConfig, // Pass OAuth config if available
+      baseUrl, // Pass base URL for token validation
+      authConfigs, // Pass auth configs for token validation
     };
 
     // Warn if binding to non-localhost without explicit ALLOWED_ORIGINS

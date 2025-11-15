@@ -208,7 +208,7 @@ describe('Multi-Auth Support', () => {
               client_id: 'client-id',
               client_secret: 'client-secret',
               scopes: ['api', 'read_repository'],
-              redirect_uri: 'https://mcp-gitlab.ai.iszn.cz/oauth/authorize',
+              redirect_uri: 'https://mcp-gitlab.ai.iszn.cz/oauth/callback',
             },
           },
           {

@@ -215,14 +215,13 @@ describe('HTTP Transport Multi-Auth Integration', () => {
 
   describe('OAuth Session Authentication', () => {
     it('should create session with OAuth token (simulated)', async () => {
-      // In real scenario, OAuth flow would create session with token
-      // Here we simulate it by creating session manually
-      
-      // Create session via initialize (simulates OAuth callback)
+      // With OAuth configured, initialize requires authentication
+      // Use Bearer token to simulate authenticated session
       const response = await request(app)
         .post('/mcp')
         .set('Accept', 'application/json')
         .set('Content-Type', 'application/json')
+        .set('Authorization', 'Bearer simulated-oauth-token')
         .send({
           jsonrpc: '2.0',
           id: 1,
@@ -241,11 +240,12 @@ describe('HTTP Transport Multi-Auth Integration', () => {
     });
 
     it('should maintain session across requests', async () => {
-      // Initialize
+      // Initialize with Bearer token (OAuth configured server requires auth)
       const initResponse = await request(app)
         .post('/mcp')
         .set('Accept', 'application/json')
         .set('Content-Type', 'application/json')
+        .set('Authorization', 'Bearer test-session-token')
         .send({
           jsonrpc: '2.0',
           id: 1,
@@ -280,11 +280,12 @@ describe('HTTP Transport Multi-Auth Integration', () => {
 
   describe('Priority Handling', () => {
     it('should prefer OAuth session over Bearer token', async () => {
-      // Create OAuth session
+      // Create session with Bearer token first
       const initResponse = await request(app)
         .post('/mcp')
         .set('Accept', 'application/json')
         .set('Content-Type', 'application/json')
+        .set('Authorization', 'Bearer primary-token')
         .send({
           jsonrpc: '2.0',
           id: 1,
@@ -321,9 +322,9 @@ describe('HTTP Transport Multi-Auth Integration', () => {
   });
 
   describe('No Auth Provided', () => {
-    it('should allow initialization without auth (session creation)', async () => {
-      // Some MCP implementations allow initialize without auth
-      // Auth is checked on subsequent requests
+    it('should reject initialization without auth when OAuth is configured', async () => {
+      // When OAuth is configured, server requires authentication for initialization
+      // This triggers OAuth flow in clients like Cursor
       const response = await request(app)
         .post('/mcp')
         .set('Accept', 'application/json')
@@ -339,9 +340,10 @@ describe('HTTP Transport Multi-Auth Integration', () => {
           },
         });
 
-      // Should succeed and create session
-      expect(response.status).toBe(200);
-      expect(response.headers['mcp-session-id']).toBeDefined();
+      // Should reject with 401 Unauthorized
+      expect(response.status).toBe(401);
+      expect(response.body.error).toBe('Unauthorized');
+      expect(response.body.message).toContain('Authentication required');
     });
 
     it('should reject tools/list without session or auth', async () => {

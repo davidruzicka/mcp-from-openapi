@@ -296,9 +296,10 @@ When running without a profile, authentication is automatically configured from 
 
 **Example**: Use custom env var for GitLab token:
 ```bash
-export AUTH_ENV_VAR=GITLAB_TOKEN
-export GITLAB_TOKEN=glpat-xxxxxxxxxxxx
+export API_TOKEN=glpat-xxxxxxxxxxxx
+export API_BASE_URL=https://gitlab.example.com/api/v4
 export OPENAPI_SPEC_PATH=path/to/openapi.yaml
+export MCP_PROFILE_PATH=profiles/gitlab/developer-profile.json
 npm start
 ```
 

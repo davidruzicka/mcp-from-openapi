@@ -72,6 +72,11 @@ export interface InterceptorConfig {
  * - When multiple auth methods are provided as array, they are tried in order
  * - priority field determines the order (lower = higher priority)
  * - First successful authentication is used
+ * 
+ * Token validation (optional):
+ * - validation_endpoint: API endpoint to verify token validity (e.g., "/api/v4/user")
+ * - Validates token during initialization to fail fast with invalid tokens
+ * - Improves UX by rejecting bad tokens immediately, not after first tool call
  */
 export interface AuthInterceptor {
   type: 'bearer' | 'query' | 'custom-header' | 'oauth';
@@ -86,6 +91,11 @@ export interface AuthInterceptor {
   
   // For oauth type
   oauth_config?: OAuthConfig;
+  
+  // Optional token validation
+  validation_endpoint?: string;  // API endpoint to verify token (e.g., "/api/v4/user")
+  validation_method?: 'GET' | 'HEAD';  // HTTP method for validation (default: GET)
+  validation_timeout_ms?: number;  // Timeout in milliseconds (default: 5000)
 }
 
 /**

@@ -68,7 +68,10 @@ export const authInterceptorSchema = z.object({
     header_name: z.string().optional(),
     query_param: z.string().optional(),
     value_from_env: z.string().optional(),
-    oauth_config: oAuthConfigSchema.optional()
+    oauth_config: oAuthConfigSchema.optional(),
+    validation_endpoint: z.string().optional(),
+    validation_method: z.union([z.literal("GET"), z.literal("HEAD")]).optional(),
+    validation_timeout_ms: z.number().optional()
 });
 
 export const interceptorConfigSchema = z.object({

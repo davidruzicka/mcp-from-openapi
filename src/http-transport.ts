@@ -24,6 +24,7 @@ import type {
 import { isInitializeRequest } from './jsonrpc-validator.js';
 import { MetricsCollector } from './metrics.js';
 import { ExternalOAuthProvider } from './oauth-provider.js';
+import type { AuthInterceptor } from './types/profile.js';
 
 // Default maximum token length (1000 characters)
 const DEFAULT_MAX_TOKEN_LENGTH = 1000;
@@ -414,6 +415,79 @@ export class HttpTransport {
   }
 
   /**
+   * Validate authentication token by making a probe request to the API
+   * 
+   * Supports all auth types: bearer, query, custom-header
+   * Returns true if token is valid, false otherwise
+   */
+  private async validateAuthToken(
+    authConfig: AuthInterceptor,
+    token: string,
+    baseUrl: string
+  ): Promise<boolean> {
+    if (!authConfig.validation_endpoint) {
+      return true; // Skip validation if not configured
+    }
+
+    const url = new URL(authConfig.validation_endpoint, baseUrl);
+    const headers: Record<string, string> = {};
+    const method = authConfig.validation_method || 'GET';
+    const timeout = authConfig.validation_timeout_ms || 5000;
+
+    // Apply auth based on type
+    switch (authConfig.type) {
+      case 'bearer':
+        headers['Authorization'] = `Bearer ${token}`;
+        break;
+      
+      case 'custom-header':
+        if (authConfig.header_name) {
+          headers[authConfig.header_name] = token;
+        }
+        break;
+      
+      case 'query':
+        if (authConfig.query_param) {
+          url.searchParams.set(authConfig.query_param, token);
+        }
+        break;
+    }
+
+    try {
+      this.logger.debug('Validating auth token', {
+        endpoint: authConfig.validation_endpoint,
+        method,
+        authType: authConfig.type,
+      });
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+      const response = await fetch(url.toString(), {
+        method,
+        headers,
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      const isValid = response.status >= 200 && response.status < 300;
+      
+      this.logger.debug('Auth token validation result', {
+        status: response.status,
+        isValid,
+      });
+
+      return isValid;
+    } catch (error) {
+      this.logger.warn(`Auth token validation failed: ${(error as Error).message}`, {
+        endpoint: authConfig.validation_endpoint,
+      });
+      return false;
+    }
+  }
+
+  /**
    * Validate token format and length
    * 
    * Why centralized: Single source of truth for token validation rules
@@ -545,6 +619,44 @@ export class HttpTransport {
         if (isInitialization) {
           // Extract and validate auth token from headers
           const authInfo = this.extractAuthToken(req);
+          
+          // If OAuth is configured, require authentication for initialization
+          // This triggers OAuth flow in clients like Cursor
+          if (this.oauthProvider && authInfo.type === 'none') {
+            res.status(401).json({ 
+              error: 'Unauthorized', 
+              message: 'Authentication required. Please authorize via OAuth.' 
+            });
+            return;
+          }
+          
+          // Validate token if auth is configured and token is provided
+          if (authInfo.token && authInfo.type !== 'oauth' && this.config.authConfigs && this.config.baseUrl) {
+            const authConfig = this.config.authConfigs.find(c => c.type === authInfo.type);
+            
+            if (authConfig && authConfig.validation_endpoint) {
+              this.logger.info('Validating auth token during initialization', {
+                authType: authInfo.type,
+                endpoint: authConfig.validation_endpoint,
+              });
+              
+              const isValid = await this.validateAuthToken(authConfig, authInfo.token, this.config.baseUrl);
+              
+              if (!isValid) {
+                this.logger.warn('Auth token validation failed during initialization', {
+                  authType: authInfo.type,
+                });
+                res.status(401).json({
+                  error: 'Unauthorized',
+                  message: 'Invalid or expired authentication token'
+                });
+                return;
+              }
+              
+              this.logger.info('Auth token validation successful');
+            }
+          }
+          
           newSessionId = this.createSession(authInfo.token);
         }
 
